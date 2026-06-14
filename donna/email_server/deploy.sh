@@ -37,9 +37,10 @@ green "==> [1/6] Installing email server dependencies into shared venv..."
 source "$VENV/bin/activate"
 pip install --quiet -r "$REPO_ROOT/donna/requirements.txt"
 
-green "==> [2/6] Creating document storage directories..."
-mkdir -p "$DONNA_DIR/documents"
-mkdir -p "$DONNA_DIR/documents/unmatched"
+green "==> [2/6] Creating storage directories..."
+mkdir -p "$DONNA_DIR/documents" "$DONNA_DIR/documents/unmatched"
+mkdir -p "$DONNA_DIR/drafts"
+mkdir -p "$DONNA_DIR/sent"
 
 green "==> [3/6] Setting up .env..."
 ENV_FILE="$DONNA_DIR/.env"
@@ -59,6 +60,7 @@ SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 EMAIL_MODE=$(grep -E "^DONNA_EMAIL_MODE=" "$ENV_FILE" 2>/dev/null | cut -d= -f2 || echo "smtp")
 EMAIL_MODE="${EMAIL_MODE:-smtp}"
 
+# ── inbound server service ────────────────────────────────────────────────────
 cat > /tmp/${SERVICE_NAME}.service << EOF
 [Unit]
 Description=Donna Email Inbound Server (${EMAIL_MODE} mode)
@@ -80,31 +82,54 @@ SyslogIdentifier=donna-email
 WantedBy=multi-user.target
 EOF
 
+# ── approval server service ───────────────────────────────────────────────────
+cat > /tmp/donna-email-approval.service << EOF
+[Unit]
+Description=Donna Email Approval Server (lawyer draft approval endpoint)
+After=network.target donna-email.service
+
+[Service]
+Type=simple
+User=donna
+WorkingDirectory=$DONNA_DIR
+EnvironmentFile=$ENV_FILE
+ExecStart=$VENV/bin/python -m donna.email_server.approval_server
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=donna-email-approval
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 sudo mv /tmp/${SERVICE_NAME}.service "$SERVICE_FILE"
+sudo mv /tmp/donna-email-approval.service /etc/systemd/system/donna-email-approval.service
 sudo systemctl daemon-reload
-sudo systemctl enable "$SERVICE_NAME"
+sudo systemctl enable "$SERVICE_NAME" donna-email-approval
 
 green "==> [5/6] Running test suite..."
 cd "$REPO_ROOT"
 python -m pytest donna/email_server/tests/ -q --tb=short
 echo ""
 
-green "==> [6/6] Starting donna-email service..."
-sudo systemctl restart "$SERVICE_NAME"
+green "==> [6/6] Starting services..."
+sudo systemctl restart "$SERVICE_NAME" donna-email-approval
 sleep 2
-sudo systemctl status "$SERVICE_NAME" --no-pager -l
+sudo systemctl status "$SERVICE_NAME" donna-email-approval --no-pager -l
 
 echo ""
 green "✓ Donna email server deployed."
-echo "   Mode      : $EMAIL_MODE"
-echo "   Logs      : journalctl -u $SERVICE_NAME -f"
-echo "   Status    : systemctl status $SERVICE_NAME"
-echo "   Stop      : systemctl stop $SERVICE_NAME"
+echo "   Mode            : $EMAIL_MODE"
+echo "   Inbound logs    : journalctl -u donna-email -f"
+echo "   Approval logs   : journalctl -u donna-email-approval -f"
+echo "   Approval API    : http://localhost:1026/email/approve/{draft_id}?case_id={id}"
 echo ""
 if [[ "$EMAIL_MODE" == "smtp" ]]; then
   echo "   SMTP listener on localhost:1025"
   echo "   Point your mail relay / MX forward at port 1025 on this machine."
 else
-  echo "   IMAP polling ${EMAIL_MODE} every 30s"
+  echo "   IMAP polling every 30s"
   echo "   Polling: $(grep DONNA_EMAIL_USER "$ENV_FILE" | cut -d= -f2)"
 fi

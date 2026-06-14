@@ -29,3 +29,25 @@ attachments:
   # Base directory — files saved to {save_dir}/{case_id}/{filename}
   # On GBIO this resolves to /gbio/donna/documents via DONNA_ATTACHMENT_DIR in .env
   save_dir: "/gbio/donna/documents"
+
+outbound_smtp:
+  # SMTP relay for sending outbound emails.
+  # Gmail:   host=smtp.gmail.com  port=587  use_tls=true
+  # Outlook: host=smtp.office365.com  port=587  use_tls=true
+  # Local Postfix: host=localhost  port=25  use_tls=false
+  host: "smtp.gmail.com"
+  port: 587
+  use_tls: true
+  from_address: ""        # set DONNA_EMAIL_USER in .env (same account as IMAP)
+  from_name: "Donna (AI Legal Secretary)"
+
+drafts:
+  # Where email drafts awaiting lawyer approval are stored
+  dir: "/gbio/donna/drafts"
+  sent_dir: "/gbio/donna/sent"
+
+approval_server:
+  # HTTP endpoint for M1 to call when lawyer approves/rejects a draft
+  # POST /email/approve/{draft_id}  POST /email/reject/{draft_id}
+  host: "127.0.0.1"
+  port: 1026
