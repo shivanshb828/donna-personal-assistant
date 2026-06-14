@@ -120,8 +120,12 @@ async def _route_email_text(parsed: dict, session_id: str) -> None:
         return
 
     donna_reply = ""
+    phase = "UNKNOWN"
+    tool_results: list = []
     if result:
         donna_reply = result.get("reply") or result.get("text") or ""
+        phase = result.get("phase", "UNKNOWN")
+        tool_results = result.get("tool_results") or []
 
     client_email = parsed.get("sender", "unknown")
     subject = parsed.get("subject", "")
@@ -132,10 +136,37 @@ async def _route_email_text(parsed: dict, session_id: str) -> None:
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc).strftime("%B %d, %Y at %I:%M %p UTC")
 
+    # Phase → plain-English status
+    phase_labels = {
+        "DISCLOSURE": "Initial contact — consent not yet recorded",
+        "INTAKE":     "Intake in progress — collecting case details",
+        "QUALIFICATION": "Qualifying — assessing case viability",
+        "BOOKING":    "Booking — scheduling consultation",
+        "CLOSE":      "Complete — intake closed",
+    }
+    phase_label = phase_labels.get(phase, phase)
+
     attachment_lines = ""
     if attachments:
         names = [a.get("filename", "unknown") for a in attachments]
         attachment_lines = f"\nDocuments received ({len(names)}):\n" + "\n".join(f"  • {n}" for n in names) + "\n"
+
+    # Format tool calls Donna made during this turn
+    tool_lines = ""
+    if tool_results:
+        rows = []
+        for tr in tool_results:
+            name = tr.get("tool") or tr.get("name") or "unknown"
+            status = tr.get("status") or tr.get("result", {}).get("status") or "ok"
+            # Pull any notable output fields
+            data = tr.get("result") or tr.get("output") or {}
+            notes = ""
+            if isinstance(data, dict):
+                for key in ("case_id", "event_id", "appointment_time", "fee_estimate", "reason", "message"):
+                    if data.get(key):
+                        notes += f" | {key}={data[key]}"
+            rows.append(f"  • {name}  [{status}]{notes}")
+        tool_lines = "\nTools called by Donna:\n" + "\n".join(rows) + "\n"
 
     intake_body = f"""\
 Hi Dhruva,
@@ -148,7 +179,8 @@ CASE SUMMARY
 Case ID:   {case_id}
 Received:  {now}
 From:      {client_email}
-{attachment_lines}
+Status:    {phase_label}
+{attachment_lines}{tool_lines}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CLIENT MESSAGE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
