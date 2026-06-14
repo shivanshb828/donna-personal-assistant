@@ -2,7 +2,7 @@
 
 Donna is a local-first AI legal secretary for personal injury lawyers.
 
-**New workspace?** Start with [docs/hackathon-quickstart.md](docs/hackathon-quickstart.md) and [docs/testing-runbook.md](docs/testing-runbook.md).
+**New workspace?** Start with [docs/hackathon-quickstart.md](docs/hackathon-quickstart.md), [docs/storage-architecture.md](docs/storage-architecture.md), and [docs/testing-runbook.md](docs/testing-runbook.md).
 
 ## Voice Pipeline
 
@@ -35,6 +35,12 @@ Run a sample context lookup:
 
 ```bash
 python3 scripts/context_lookup.py Maria
+```
+
+Export seed data into OpenClaw memory markdown (indexed to `~/.openclaw/memory/donna.sqlite`):
+
+```bash
+python3 scripts/export_openclaw_memory.py --output openclaw/workspace
 ```
 
 ## Dell GBIO (hackathon box)

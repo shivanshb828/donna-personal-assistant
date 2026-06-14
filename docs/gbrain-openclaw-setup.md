@@ -1,26 +1,27 @@
 # GBrain + OpenClaw for Donna
 
-Donna's **M2 agent memory** runs on [GBrain](https://github.com/garrytan/gbrain) — a markdown-first knowledge graph with hybrid search, synthesis, and an OpenClaw plugin. GBrain is the background brain behind our OpenClaw instance; M3 glue tools handle structured case/calendar operations.
+Donna's **M2 agent memory** runs on [OpenClaw's built-in SQLite index](https://docs.openclaw.ai/concepts/memory-builtin) plus optional [GBrain](https://github.com/garrytan/gbrain) for synthesis and graph skills. See [storage-architecture.md](storage-architecture.md) for how the SQLite layers fit together.
 
 ## Architecture
 
 ```
 Voice / iMessage
        ↓
-M3 session router + tools (SQLite fixtures, calendar CLIs)
-       ↓
-M2 OpenClaw (`openclaw run donna`)
-       ↓
-GBrain MCP (`gbrain serve`) — case context, client pages, intake notes
+M3 SQLite tools (case rows, calendar CRUD)
+       ↓ export → MEMORY.md + memory/*.md
+M2 OpenClaw (`openclaw run donna`) → ~/.openclaw/memory/donna.sqlite
+       ↓ optional MCP
+GBrain (PGLite at ~/.gbrain/) — synthesis, dream cycle
        ↓
 Ollama / Nemotron (local on Dell GB10)
 ```
 
-| Layer | Memory | Role |
+| Layer | Engine | Role |
 |-------|--------|------|
-| **GBrain** | Markdown brain repo + Postgres/PGLite | Long-term case knowledge, synthesis, graph queries |
-| **M3 SQLite seed DB** | `data/donna_m3_*.sqlite` | Hackathon fixtures + offline M2 tool testing |
-| **Voice context bridge** | Reads SQLite today | Fast path when OpenClaw unavailable; migrate to GBrain MCP later |
+| **M3 glue** | SQLite | Structured case/calendar data + tool CLIs |
+| **OpenClaw memory** | SQLite (FTS5 + sqlite-vec) | Indexes workspace markdown for RAG |
+| **GBrain** | PGLite (Postgres WASM, not SQLite) | Optional background brain via MCP skills |
+| **Voice context bridge** | Reads M3 SQLite | Fallback when OpenClaw is unavailable |
 
 GBrain replaces the original **ChromaDB** plan in `m3-glue-layer-plan.md` for `memory.search` / `memory.write`. Structured tools (calendar, intake forms) stay in M3 Python glue.
 
@@ -111,24 +112,26 @@ Optional autopilot daemon (sync + embed + dream cycle):
 gbrain autopilot --install
 ```
 
-For hackathon demo, at minimum run periodic sync after seeding case pages:
+For synthesis and graph skills beyond OpenClaw's SQLite RAG index:
 
 ```bash
 gbrain sync --repo ~/donna-brain && gbrain embed
 ```
 
-### 6. Seed from M3 fixtures (bridge)
+### 6. Bridge M3 SQLite → OpenClaw memory
 
-Copy hackathon seed data into GBrain pages once, then let the agent compound:
+OpenClaw already indexes markdown into its own SQLite file. Export our seed DB first:
 
 ```bash
-# From dell-hack repo on Dell
 python3 scripts/init_m3_test_db.py
-python3 scripts/context_lookup.py Maria   # verify SQLite seed
-# Then have OpenClaw agent ingest case summaries into ~/donna-brain/cases/
+python3 scripts/export_openclaw_memory.py --output openclaw/workspace
+# Copy openclaw/workspace/ into your OpenClaw repo, then:
+openclaw memory index --force
 ```
 
-Long term: M3 `memory.write` tool writes to GBrain via MCP instead of ChromaDB.
+See [storage-architecture.md](storage-architecture.md).
+
+### 7. Optional GBrain layer
 
 ## Environment variables
 
@@ -168,7 +171,7 @@ bash scripts/check_services.sh
 
 ## Related docs
 
-- [Donna brain schema](donna-brain-schema.md)
+- [Storage architecture](storage-architecture.md) — SQLite vs PGLite roles
 - [M3 glue layer plan](m3-glue-layer-plan.md)
 - [Dell GBIO access](dell-gbio-access.md)
 - [GBrain INSTALL_FOR_AGENTS.md](https://github.com/garrytan/gbrain/blob/master/INSTALL_FOR_AGENTS.md)

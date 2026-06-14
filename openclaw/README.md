@@ -2,33 +2,36 @@
 
 OpenClaw agent configuration for Donna lives outside this repo (team workspace on Dell or Render). This folder documents the expected layout and GBrain integration.
 
-## Expected layout (on Dell or agent host)
+## OpenClaw workspace (on Dell)
 
 ```text
-~/donna-openclaw/          # OpenClaw workspace repo
-├── AGENTS.md              # Agent protocol (GBrain skillpack may extend this)
-├── openclaw.plugin.json   # Enable gbrain plugin (from skillpack scaffold)
-├── skills/                # Scaffolded via: gbrain skillpack scaffold --target .
-└── agents/
-    └── donna/
-        ├── SOUL.md        # Donna legal secretary persona (M2)
-        └── tools.yaml     # References M3 glue tool names
-
-~/donna-brain/             # GBrain markdown repo — see docs/donna-brain-schema.md
+~/donna-openclaw/
+├── MEMORY.md              # Case index — export from M3 SQLite
+├── memory/
+│   ├── cases/             # One page per matter
+│   └── clients/           # Client contact + consent
+├── AGENTS.md
+└── agents/donna/          # Persona + tool refs
 ```
+
+OpenClaw indexes `MEMORY.md` and `memory/**/*.md` into **`~/.openclaw/memory/donna.sqlite`** (built-in hybrid search).
 
 ## Quick setup on Dell
 
 ```bash
-# 1. GBrain + brain repo — full steps in docs/gbrain-openclaw-setup.md
-gbrain init --pglite
-mkdir -p ~/donna-brain && cd ~/donna-brain && git init
+# 1. Seed M3 SQLite + export to OpenClaw markdown
+cd dell-hack
+python3 scripts/init_m3_test_db.py
+python3 scripts/export_openclaw_memory.py --output openclaw/workspace
+# Copy openclaw/workspace/* into ~/donna-openclaw/
 
-# 2. Scaffold skills into OpenClaw workspace
-cd ~/donna-openclaw
-gbrain skillpack scaffold --target .
+# 2. Reindex OpenClaw memory
+openclaw memory index --force
 
-# 3. Run agent
+# 3. Optional GBrain — docs/gbrain-openclaw-setup.md
+gbrain skillpack scaffold --target ~/donna-openclaw
+
+# 4. Run agent
 openclaw run donna --input "How is Maria Lopez doing?"
 ```
 

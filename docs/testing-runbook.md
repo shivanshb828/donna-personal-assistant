@@ -114,7 +114,8 @@ bash scripts/check_services.sh
 ## Related docs
 
 - [M2 testing tools](m2-testing-tools.md) — JSON CLI shapes for OpenClaw stubs
-- [GBrain + OpenClaw setup](gbrain-openclaw-setup.md) — agent memory layer
+- [GBrain + OpenClaw setup](gbrain-openclaw-setup.md) — optional synthesis layer
+- [Storage architecture](storage-architecture.md) — SQLite roles (M3, OpenClaw, GBrain)
 - [Dell GBIO access](dell-gbio-access.md) — SSH and port forwarding
 - [Hackathon quickstart](hackathon-quickstart.md) — team roles and module map
 - [Voice pipeline](../donna/VOICE_PIPELINE.md) — architecture and env vars

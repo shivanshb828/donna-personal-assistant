@@ -14,7 +14,7 @@
 | Module | Owns | Status in repo |
 |--------|------|----------------|
 | **M1** | IPC envelope, iMessage bridge | Planned |
-| **M2** | OpenClaw agent + **GBrain** memory | External — see [gbrain-openclaw-setup.md](gbrain-openclaw-setup.md) |
+| **M2** | OpenClaw agent + SQLite memory index | `openclaw run donna` — see [storage-architecture.md](storage-architecture.md) |
 | **M3** | Glue tools, SQLite context/calendar | Partial — seed DBs + CLIs + context bridge |
 | **M4** | Voice pipeline (STT/VAD/TTS) | Implemented — push-to-talk |
 
@@ -33,10 +33,12 @@
 3. Start **GBrain + OpenClaw** (Aayush): `gbrain serve` + `openclaw run donna` — [gbrain-openclaw-setup.md](gbrain-openclaw-setup.md)
 4. Pull latest repo branch with voice + M3 integration
 5. Seed test DBs: `python3 scripts/init_m3_test_db.py`
-6. Start dashboard (Dhruva): `npm run dev` on port 3001
-7. Start fake dashboard if React not ready: `python3 donna/fake_dashboard.py`
-8. Run health check: `bash scripts/check_services.sh`
-9. Launch voice: `cd donna && python3 -m voice.pipeline`
+6. Export to OpenClaw memory: `python3 scripts/export_openclaw_memory.py`
+7. Optional GBrain (Aayush): `gbrain serve` — [gbrain-openclaw-setup.md](gbrain-openclaw-setup.md)
+8. Start dashboard (Dhruva): `npm run dev` on port 3001
+9. Start fake dashboard if React not ready: `python3 donna/fake_dashboard.py`
+10. Run health check: `bash scripts/check_services.sh`
+11. Launch voice: `cd donna && python3 -m voice.pipeline`
 
 ## Branches (June 14, 2026)
 
