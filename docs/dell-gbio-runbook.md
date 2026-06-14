@@ -12,7 +12,7 @@
 | OS | Ubuntu 24.04.4 LTS, aarch64, kernel 6.17.0-1018-nvidia |
 | GPU | NVIDIA GB10, driver 580.159.03 |
 | Repo path | `/home/dell/dell-hack` |
-| Branch | `integrate-dafely-from-pr` (or `main` after merge) |
+| Branch | `main` |
 | Password | `123456` (hackathon dummy — safe to store in repo) |
 
 ```bash
@@ -28,7 +28,7 @@ The repo is **not** pre-installed on the GB10.
 cd ~
 git clone https://github.com/shivanshb828/dell-hack.git
 cd dell-hack
-git checkout integrate-dafely-from-pr
+git checkout main
 git pull
 
 bash scripts/setup_venv.sh
@@ -53,7 +53,7 @@ Do **not** run `pip install -r requirements.txt` system-wide.
 |---------|------|--------|-------|
 | faster-whisper STT | 9000 | Up | Docker `whisper` (host 9000 → container 8000) |
 | Kokoro TTS | 8880 | Up | Docker `kokoro` |
-| Ollama | 11434 | Up | `127.0.0.1` only; model **`nemotron-3-super:latest`** |
+| Ollama | 11434 | Up | `127.0.0.1` only; model **`nemotron-3-nano`** |
 | Dashboard WS | 3001 | Down | Use `bash scripts/run_fake_dashboard.sh` |
 | OpenClaw CLI | — | Installed | Optional — voice uses Ollama direct |
 | GBrain CLI | — | Not installed | Optional |
@@ -62,6 +62,7 @@ Health check:
 
 ```bash
 cd ~/dell-hack && bash scripts/check_services.sh
+bash scripts/verify_ollama_model.sh nemotron-3-nano
 ```
 
 Discovery dump:
@@ -118,7 +119,9 @@ Enter → Mic → Energy VAD → STT :9000 → SQLite context → Ollama :11434 
 
 - **No OpenClaw hop** — direct Ollama HTTP
 - **No torch on Dell** — `[VAD] Silero failed ... using energy VAD` is expected
-- Default model: `nemotron-3-super` (set via `DONNA_MODEL` if needed)
+- Default model: **`nemotron-3-nano`** (set via `DONNA_MODEL`; already pulled on GB10)
+- Voice **does not use OpenClaw/NemoClaw** — direct Ollama HTTP for latency
+- OpenClaw + Nemotron Nano wiring is a **separate M2 task** (known in progress / blocked)
 - Context DB: `data/donna_m3_context.sqlite` (paths relative to repo root)
 
 ### Run commands
@@ -171,4 +174,4 @@ python3 scripts/calendar_tool.py search_events --input '{"case_id":"case-2026-00
 - [testing-runbook.md](testing-runbook.md) — test commands
 - [hackathon-quickstart.md](hackathon-quickstart.md) — team roles, demo script
 - [VOICE_PIPELINE.md](../donna/VOICE_PIPELINE.md) — env vars, architecture
-- [storage-architecture.md](storage-architecture.md) — SQLite layers
+- [dell-ssh-agent-prompt.md](dell-ssh-agent-prompt.md) — system prompt for SSH agent with full GB10 context

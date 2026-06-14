@@ -23,7 +23,7 @@ check "Ollama running" "pgrep -x ollama"
 check "Ollama model loaded" "ollama ps | grep -q nemotron"
 check "Whisper STT (port 9000)" "curl -sf http://localhost:9000/health"
 check "Kokoro TTS (port 8880)" "curl -sf http://localhost:8880/health"
-check "ChromaDB (port 8001)" "curl -sf http://localhost:8001/api/v1/heartbeat"
+check "ChromaDB (port 8001)" "curl -sf http://localhost:8001/api/v2/heartbeat"
 
 echo ""
 echo "Database:"
@@ -32,23 +32,35 @@ check "Clients seeded" "sqlite3 knowledge/donna.db 'SELECT COUNT(*) FROM clients
 check "Cases seeded" "sqlite3 knowledge/donna.db 'SELECT COUNT(*) FROM cases' | grep -v '^0$'"
 
 echo ""
-echo "Security:"
+echo "Security (optional — NemoClaw/OpenShell):"
 if command -v openshell &> /dev/null; then
     check "OpenShell installed" "openshell --version"
     check "Policy applied" "openshell status | grep -q donna-policy"
 else
-    echo "  ⚠ OpenShell not installed (install NemoClaw first)"
-    FAIL=$((FAIL + 1))
+    echo "  ⚠ OpenShell not installed (optional for voice demo)"
 fi
 
 echo ""
-echo "Python deps:"
+echo "Python deps (required for voice):"
 check "pyaudio" "python3 -c 'import pyaudio'"
 check "httpx" "python3 -c 'import httpx'"
-check "chromadb" "python3 -c 'import chromadb'"
 check "numpy" "python3 -c 'import numpy'"
-check "torch" "python3 -c 'import torch'"
 check "pyyaml" "python3 -c 'import yaml'"
+
+echo ""
+echo "Python deps (optional — telephony/RAG stack):"
+if python3 -c 'import chromadb' 2>/dev/null; then
+    echo "  ✓ chromadb"
+    PASS=$((PASS + 1))
+else
+    echo "  ⚠ chromadb (ChromaDB server OK without Python client)"
+fi
+if python3 -c 'import torch' 2>/dev/null; then
+    echo "  ✓ torch"
+    PASS=$((PASS + 1))
+else
+    echo "  ⚠ torch (not needed for voice pipeline on Dell)"
+fi
 
 echo ""
 echo "=================="

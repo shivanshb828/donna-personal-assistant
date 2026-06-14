@@ -4,7 +4,7 @@ description: "AI legal secretary for personal injury law firms. Runs 100% locall
 
 model:
   provider: ollama
-  model: nemotron:120b
+  model: qwen2.5:72b
   base_url: http://localhost:11434
   temperature: 0.3
   max_tokens: 300

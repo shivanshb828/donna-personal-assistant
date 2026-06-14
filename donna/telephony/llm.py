@@ -20,7 +20,12 @@ class LLMResult:
 
 class DonnaLLM:
     def __init__(self, *, ollama_url: str, model: str) -> None:
-        self.ollama_url = ollama_url.rstrip("/")
+        normalized = ollama_url.rstrip("/")
+        for suffix in ("/api/generate", "/api/chat"):
+            if normalized.endswith(suffix):
+                normalized = normalized[: -len(suffix)]
+                break
+        self.ollama_url = normalized
         self.model = model
 
     def chat(

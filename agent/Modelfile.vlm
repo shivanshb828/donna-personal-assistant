@@ -1,0 +1,22 @@
+FROM qwen2.5-vl:72b
+
+# VLM for Donna's document intelligence pipeline.
+# Handles scanned PDFs, medical records, police reports, image attachments.
+# Same Qwen family as the brain model (qwen2.5:72b) — consistent tool-calling quality.
+# Pull: ollama pull qwen2.5-vl:72b
+# Register: ollama create donna-vlm -f agent/Modelfile.vlm
+
+PARAMETER temperature 0.1
+PARAMETER top_p 0.9
+PARAMETER top_k 40
+PARAMETER num_ctx 8192
+PARAMETER repeat_penalty 1.1
+PARAMETER num_predict 2048
+
+PARAMETER stop "<|end_of_text|>"
+PARAMETER stop "<|im_end|>"
+
+# Lower temperature than brain model — extraction tasks need precision, not creativity.
+# Higher num_predict — document summaries and structured JSON extractions are verbose.
+
+SYSTEM ""

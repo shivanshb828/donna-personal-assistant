@@ -186,15 +186,23 @@ class ToolRegistry:
         self._client_ids: dict[str, str] = {}
         self._case_ids: dict[str, str] = {}
 
-    def execute(self, *, call_sid: str, tool_name: str, args: dict) -> ToolResult:
-        required = REQUIRED_CONSENTS.get(tool_name, set())
-        for consent_type in required:
-            if not telephony_db.has_consent(self.telephony_db_path, call_sid, consent_type):
-                return ToolResult(
-                    ok=False,
-                    data={},
-                    error=f"Missing required consent: {consent_type}",
-                )
+    def execute(
+        self,
+        *,
+        call_sid: str,
+        tool_name: str,
+        args: dict,
+        enforce_consent: bool = True,
+    ) -> ToolResult:
+        if enforce_consent:
+            required = REQUIRED_CONSENTS.get(tool_name, set())
+            for consent_type in required:
+                if not telephony_db.has_consent(self.telephony_db_path, call_sid, consent_type):
+                    return ToolResult(
+                        ok=False,
+                        data={},
+                        error=f"Missing required consent: {consent_type}",
+                    )
 
         handlers = {
             "record_consent": self._record_consent,

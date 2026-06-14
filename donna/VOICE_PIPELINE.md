@@ -9,6 +9,10 @@ locally on Dell GB10 — no audio or case data leaves the machine.
 
 See `README.md` for product overview and demo script.
 
+Push-to-talk and telephony now share the same local Nano voice brain:
+`SessionRouter + ToolRegistry + SQLite state`. The only channel-specific pieces are
+audio transport and user I/O.
+
 ## Architecture
 
 ```
@@ -20,9 +24,13 @@ VAD — Silero-VAD (energy fallback) — auto-stops on 800ms silence
     ↓
 STT — faster-whisper-server (localhost:9000, OpenAI-compatible)
     ↓
-M3 context lookup — optional SQLite seed DB (data/donna_m3_context.sqlite)
+SessionRouter (`local_assistant` mode)
     ↓
-Ollama (nemotron-3-super on Dell GB10)
+ToolRegistry + SQLite state (`data/donna_telephony.sqlite`)
+    ↓
+M3 context lookup / case context (`data/donna_m3_context.sqlite`)
+    ↓
+Ollama (nemotron-3-nano on Dell GB10)
     ↓
 TTS — Kokoro-FastAPI (localhost:8880) → Piper fallback
     ↓
@@ -39,9 +47,11 @@ Dashboard WebSocket (localhost:3001) — status + transcript events
 | `voice/stt.py` | Speech-to-text via faster-whisper-server |
 | `voice/tts.py` | Text-to-speech — Kokoro primary, Piper fallback |
 | `voice/wake_word.py` | Push-to-talk (keyboard) now; openwakeword stub for later |
-| `voice/pipeline.py` | Main async loop — push-to-talk mode |
+| `voice/pipeline.py` | Push-to-talk adapter over the shared router/tool brain |
 | `voice/dashboard_bridge.py` | WebSocket event emitter |
 | `fake_dashboard.py` | Dev tool — prints pipeline events in terminal |
+| `glue/router/session_router.py` | Shared local Nano brain for mic + telephony |
+| `glue/tools/registry.py` | Shared intake / qualify / case / booking tools |
 
 ## Setup
 
@@ -129,9 +139,10 @@ See [docs/dell-gbio-runbook.md](../docs/dell-gbio-runbook.md) for port-forward +
 | `DONNA_KOKORO_URL` | `http://localhost:8880/v1/audio/speech` | Kokoro TTS |
 | `DONNA_KOKORO_VOICE` | `af_heart` | Kokoro voice |
 | `DONNA_PIPER_MODEL` | `en_US-amy-medium` | Piper voice model |
-| `DONNA_OLLAMA_URL` | `http://localhost:11434/api/generate` | Ollama endpoint |
-| `DONNA_MODEL` | `nemotron-3-super` on Dell GB10; `nemotron` elsewhere | Ollama model name |
+| `DONNA_OLLAMA_URL` | `http://localhost:11434` | Ollama base URL |
+| `DONNA_MODEL` | `nemotron-3-nano` on Dell GB10 | Ollama model name |
 | `DONNA_CONTEXT_DB` | `data/donna_m3_context.sqlite` | Local SQLite DB for case context lookup |
+| `DONNA_TELEPHONY_DB` | `data/donna_telephony.sqlite` | Shared session/intake state for mic + phone |
 | `DONNA_DASHBOARD_WS` | `ws://localhost:3001` | Dashboard WebSocket |
 | `DONNA_WAKEWORD_MODEL` | *(unset)* | Custom ONNX wake word model path |
 
@@ -145,6 +156,7 @@ python -m pytest donna/voice/tests/ -v   # 30/30
 python -m voice.pipeline --test-mic  # record 3s → play back
 python -m voice.tts                  # speaks "Hello, I'm Donna"
 python -m voice.stt                  # records 5s → transcribes (needs STT server)
+python -m donna.voice.pipeline --text "How is Maria Lopez doing?"
 
 # Full loop (push-to-talk)
 python -m voice.pipeline
@@ -168,9 +180,10 @@ Built-in fallback model: `hey_jarvis` (closest phoneme match to "Hey Donna").
 Events emitted to `ws://localhost:3001`:
 
 ```json
-{"type": "pipeline_status", "status": "ready|listening|processing|speaking", "ts": 1234}
-{"type": "user_speech", "text": "I was in an accident last week", "ts": 1234}
-{"type": "donna_speech", "text": "I can help with that. What date did the accident occur?", "ts": 1234}
+{"type": "pipeline_status", "status": "ready|listening|processing|speaking", "callSid": "local-...", "sessionId": "local-...", "ts": 1234}
+{"type": "user_speech", "text": "I was in an accident last week", "callSid": "local-...", "sessionId": "local-...", "ts": 1234}
+{"type": "donna_speech", "text": "I can help with that. What date did the accident occur?", "callSid": "local-...", "sessionId": "local-...", "ts": 1234}
+{"type": "tool_result", "callSid": "local-...", "sessionId": "local-...", "tool": "intake.start", "ok": true}
 {"type": "call_started", "callSid": "CA...", "callerPhone": "+1...", "agentMode": "inbound_intake"}
 {"type": "tool_result", "callSid": "CA...", "tool": "intake.start", "ok": true}
 {"type": "call_ended", "callSid": "CA...", "duration": 120, "outcome": "BOOKING"}
@@ -184,6 +197,6 @@ Telephony events are emitted by `donna/telephony/local_provider.py` via the same
 |---------|------|---------------|
 | faster-whisper-server | 9000 | Shivansh (Docker on Dell GBIO) |
 | Kokoro-FastAPI | 8880 | Shivansh (Docker) |
-| Ollama + Nemotron 120B | 11434 | Shivansh (after `ollama pull nemotron`) |
+| Ollama + Nemotron 3 Nano | 11434 | `ollama pull nemotron-3-nano` |
 | React dashboard | 3001 | Dhruva (`npm run dev`) |
 | **Donna telephony (Twilio)** | **3002** | **`bash scripts/run_telephony.sh`** |
