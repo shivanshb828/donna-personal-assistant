@@ -8,10 +8,13 @@ Donna is a voice-native AI layer at the OS level. Not a chatbot, not a vertical 
 
 ## Current state (June 14 2026)
 
-Voice pipeline: **done**, committed at `c5995f5` on `origin/main`.
-- Code in `donna/voice/`
-- 30/30 unit tests pass: `python -m pytest donna/voice/tests/ -v`
-- Push-to-talk mode (Enter key) working end-to-end
+Voice pipeline on Dell GB10 (`promaxgb10-887e`):
+- Branch `integrate-dafely-from-pr` — STT → SQLite context → **Ollama direct** → TTS
+- Setup: `bash scripts/setup_venv.sh` + `bash scripts/run_voice.sh` from `~/dell-hack`
+- **No built-in mic** on stock GB10 — USB headset required
+- Full handoff: [docs/dell-gbio-runbook.md](docs/dell-gbio-runbook.md)
+
+Unit tests: `cd donna && python3 -m pytest voice/tests/ -v` (30/30 mocked)
 
 ## Remaining work
 
@@ -30,7 +33,7 @@ Voice pipeline: **done**, committed at `c5995f5` on `origin/main`.
 - Kokoro-FastAPI port 8880 as primary TTS (GPU); Piper fallback
 - STT: faster-whisper at localhost:9000, model `Systran/faster-distil-whisper-large-v3`
 - VAD: Silero-VAD + EnergyVAD fallback, 800ms silence threshold
-- Agent: OpenClaw CLI first, Ollama/nemotron fallback
+- Agent: **Ollama direct** (`nemotron-3-super` on Dell); OpenClaw optional for M2
 - Dashboard: WebSocket ws://localhost:3001, silent no-op if down
 - Twilio = inbound call entry point (demo centerpiece, not stretch)
 - OS extension framing: Donna runs OS-level tools locally on Dell GB10 — privacy/speed angle
@@ -42,7 +45,7 @@ Voice pipeline: **done**, committed at `c5995f5` on `origin/main`.
 | Voice capture | PyAudio 16kHz mono PCM16 |
 | VAD | Silero-VAD + EnergyVAD fallback |
 | STT | faster-whisper-server (OpenAI-compatible API) |
-| Agent | OpenClaw CLI → Ollama nemotron 120B |
+| Agent | Ollama HTTP (`nemotron-3-super` on GB10) |
 | TTS | Kokoro-FastAPI (GPU) → Piper |
 | Inbound calls | Twilio Media Streams |
 | Dashboard | WebSocket + React |
@@ -58,9 +61,18 @@ Voice pipeline: **done**, committed at `c5995f5` on `origin/main`.
 
 ## Run commands
 
+**Dell GB10:** see [docs/dell-gbio-runbook.md](docs/dell-gbio-runbook.md)
+
+```bash
+cd ~/dell-hack
+bash scripts/setup_venv.sh
+bash scripts/run_voice.sh
+```
+
+**Dev / Mac:**
+
 ```bash
 cd donna/
-python -m pytest voice/tests/ -v         # unit tests (no hardware)
-python fake_dashboard.py &               # dev dashboard
-python -m voice.pipeline                 # push-to-talk mode
+python -m pytest voice/tests/ -v
+python -m donna.voice.pipeline
 ```

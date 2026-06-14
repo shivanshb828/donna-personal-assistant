@@ -41,14 +41,16 @@ python3 scripts/calendar_tool.py create_event --input '{
 }'
 ```
 
-## Voice pipeline (local Mac or Dell)
+## Voice pipeline (Mac or Dell)
 
-Install deps once:
+**Dell GB10:** use [dell-gbio-runbook.md](dell-gbio-runbook.md) — `setup_venv.sh` + `run_voice.sh` from repo root. Stock box has **no mic**.
+
+**macOS:**
 
 ```bash
-cd donna
-pip install -r requirements.txt
-brew install portaudio   # macOS only
+brew install portaudio
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r donna/requirements.txt
 ```
 
 Unit tests:
@@ -57,22 +59,29 @@ Unit tests:
 cd donna && python3 -m pytest voice/tests/ -v
 ```
 
-Hardware / integration smoke:
+Hardware / integration smoke (Dell — from repo root, venv active):
+
+```bash
+bash scripts/run_voice.sh
+python -m donna.voice.pipeline --test-mic
+```
+
+Hardware / integration smoke (macOS — from `donna/`):
 
 ```bash
 cd donna
-python3 -m voice.pipeline --test-mic    # 3s record + playback
-python3 -m voice.tts                    # speaks test phrase
-python3 -m voice.stt                    # 5s record → STT (needs :9000)
-python3 fake_dashboard.py                 # terminal WS listener on :3001
-python3 -m voice.pipeline               # full push-to-talk loop
+python3 -m voice.pipeline --test-mic
+python3 -m voice.tts
+python3 -m voice.stt
+python3 fake_dashboard.py
+python3 -m voice.pipeline
 ```
 
-With M3 context injection (from repo root, seed DB present):
+With M3 context injection (repo root, seed DB present):
 
 ```bash
-# Say something like "How is Maria doing?" — pipeline loads case context
-cd donna && python3 -m voice.pipeline
+bash scripts/run_voice.sh
+# Say "How is Maria doing?" — expect [Loaded case context from local DB]
 ```
 
 ## Dell service health
@@ -89,12 +98,11 @@ All checks should print `OK`. Any `FAIL` means that layer of the demo stack is d
 
 Use before pitching or recording a demo:
 
-- [ ] `check_services.sh` — STT, TTS, Ollama, dashboard ports up
+- [ ] `check_services.sh` — STT, TTS, Ollama OK (dashboard :3001 optional)
+- [ ] `arecord -l` lists a device if demo needs on-box mic (stock GB10: empty)
 - [ ] `context_lookup.py Maria` — returns case hits
-- [ ] `fake_dashboard.py` or React dashboard on :3001
-- [ ] `python3 -m voice.pipeline` — push-to-talk full loop
-- [ ] Dashboard shows `user_speech` / `donna_speech` events
-- [ ] Mentioning "Maria" triggers `[Loaded case context from local DB]` in pipeline output
+- [ ] `bash scripts/run_voice.sh` — full push-to-talk loop
+- [ ] Mentioning "Maria" triggers `[Loaded case context from local DB]`
 
 ## CI / future automation
 
@@ -116,6 +124,7 @@ bash scripts/check_services.sh
 - [M2 testing tools](m2-testing-tools.md) — JSON CLI shapes for OpenClaw stubs
 - [GBrain + OpenClaw setup](gbrain-openclaw-setup.md) — optional synthesis layer
 - [Storage architecture](storage-architecture.md) — SQLite roles (M3, OpenClaw, GBrain)
+- [Dell GB10 runbook](dell-gbio-runbook.md) — **start here for new workspaces**
 - [Dell GBIO access](dell-gbio-access.md) — SSH and port forwarding
 - [Hackathon quickstart](hackathon-quickstart.md) — team roles and module map
 - [Voice pipeline](../donna/VOICE_PIPELINE.md) — architecture and env vars

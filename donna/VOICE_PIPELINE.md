@@ -107,6 +107,19 @@ cd ~/dell-hack && bash scripts/run_voice.sh
 
 Press **ENTER** to speak. Donna auto-stops when you go silent (~800ms).
 
+## Audio on Dell GB10 (confirmed)
+
+**No built-in microphone** on hackathon GB10 boxes (`arecord -l` empty). Playback is HDMI-only unless you add USB audio.
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| Pipeline starts, nothing transcribed | Plug **USB mic/headset**; verify with `arecord -l` |
+| ALSA / JACK warnings | Harmless — ignore |
+| `[VAD] Silero failed ... energy VAD` | Expected without torch |
+| No speaker output | HDMI only — connect display/speaker or USB audio |
+
+See [docs/dell-gbio-runbook.md](../docs/dell-gbio-runbook.md) for port-forward + Mac mic option.
+
 ## Env Vars
 
 | Variable | Default | Description |
@@ -158,7 +171,12 @@ Events emitted to `ws://localhost:3001`:
 {"type": "pipeline_status", "status": "ready|listening|processing|speaking", "ts": 1234}
 {"type": "user_speech", "text": "I was in an accident last week", "ts": 1234}
 {"type": "donna_speech", "text": "I can help with that. What date did the accident occur?", "ts": 1234}
+{"type": "call_started", "callSid": "CA...", "callerPhone": "+1...", "agentMode": "inbound_intake"}
+{"type": "tool_result", "callSid": "CA...", "tool": "intake.start", "ok": true}
+{"type": "call_ended", "callSid": "CA...", "duration": 120, "outcome": "BOOKING"}
 ```
+
+Telephony events are emitted by `donna/telephony/local_provider.py` via the same WebSocket bridge.
 
 ## Service Dependencies
 
@@ -168,3 +186,4 @@ Events emitted to `ws://localhost:3001`:
 | Kokoro-FastAPI | 8880 | Shivansh (Docker) |
 | Ollama + Nemotron 120B | 11434 | Shivansh (after `ollama pull nemotron`) |
 | React dashboard | 3001 | Dhruva (`npm run dev`) |
+| **Donna telephony (Twilio)** | **3002** | **`bash scripts/run_telephony.sh`** |

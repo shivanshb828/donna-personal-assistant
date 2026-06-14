@@ -1,6 +1,8 @@
 # Dell GBIO / Pro Max Access
 
-Donna runs locally on the **Dell Pro Max with GB10** provided at the Dell x NVIDIA hackathon (June 14, 2026). Use this doc to SSH in, sync the repo, and verify services.
+Donna runs locally on the **Dell Pro Max with GB10** provided at the Dell x NVIDIA hackathon (June 14, 2026).
+
+> **Full handoff for new workspaces:** [dell-gbio-runbook.md](dell-gbio-runbook.md) — clone, venv, **no built-in mic**, confirmed services.
 
 ## SSH connection
 
@@ -79,7 +81,7 @@ Confirmed on `promaxgb10-887e` (2026-06-14):
 | Kokoro TTS | 8880 | 0.0.0.0 | `kokoro` | `DONNA_KOKORO_URL` | Shivansh | Up |
 | Ollama | 11434 | 127.0.0.1 | native | `DONNA_OLLAMA_URL`, `DONNA_MODEL` | Shivansh | Up |
 | React dashboard WS | 3001 | — | — | `DONNA_DASHBOARD_WS` | Dhruva | Down |
-| OpenClaw | CLI | — | — | `DONNA_OPENCLAW_BIN` | Aayush | Installed |
+| OpenClaw | CLI | — | — | — | Aayush | Installed |
 | GBrain | MCP | — | — | — | Aayush | Not installed |
 
 Ollama model on box (June 14):
@@ -119,6 +121,15 @@ ssh -L 9000:localhost:9000 \
 
 Then run voice pipeline on your Mac with defaults unchanged, or run everything on the Dell over SSH.
 
+## Audio on GB10 (confirmed)
+
+**No built-in microphone** on `promaxgb10-887e` — `arecord -l` returns empty; `aplay -l` shows HDMI only.
+
+- Plug a **USB mic/headset** for on-box voice demo
+- Or use **Mac mic + port forward** (command above) and run voice locally against Dell STT/TTS/Ollama
+
+ALSA/JACK warnings on pipeline startup are harmless.
+
 ## Troubleshooting
 
 | Symptom | Check |
@@ -131,4 +142,6 @@ Then run voice pipeline on your Mac with defaults unchanged, or run everything o
 | `externally-managed-environment` on pip | Run `bash scripts/setup_venv.sh` from `~/dell-hack` |
 | `No module named pyaudio` / `httpx` | Same — uses apt + venv; do not `pip install` system-wide |
 | pip `JSONDecodeError` on PyPI | Re-run `bash scripts/setup_venv.sh` after `git pull` (apt-first path) |
+| Pipeline runs but no speech heard | No capture device — USB mic or Mac + port forward |
+| ALSA / JACK warnings | Ignore — common on headless Linux |
 | OpenClaw missing | Optional — voice calls Ollama directly |

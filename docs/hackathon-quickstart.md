@@ -28,17 +28,16 @@
 
 ## Day-of startup order
 
-1. SSH to Dell — see [dell-gbio-access.md](dell-gbio-access.md)
-2. Start inference stack (Shivansh): STT → TTS → Ollama
-3. Start **GBrain + OpenClaw** (Aayush): `gbrain serve` + `openclaw run donna` — [gbrain-openclaw-setup.md](gbrain-openclaw-setup.md)
-4. Pull latest repo branch with voice + M3 integration
-5. Seed test DBs: `python3 scripts/init_m3_test_db.py`
-6. Export to OpenClaw memory: `python3 scripts/export_openclaw_memory.py`
-7. Optional GBrain (Aayush): `gbrain serve` — [gbrain-openclaw-setup.md](gbrain-openclaw-setup.md)
-8. Start dashboard (Dhruva): `npm run dev` on port 3001
-9. Start fake dashboard if React not ready: `python3 donna/fake_dashboard.py`
-10. Run health check: `bash scripts/check_services.sh`
-11. Launch voice: `cd donna && python3 -m voice.pipeline`
+1. SSH to Dell — [dell-gbio-runbook.md](dell-gbio-runbook.md) · `ssh dell@10.104.77.67`
+2. Clone repo if needed: `git clone … && cd dell-hack && git checkout integrate-dafely-from-pr`
+3. Inference stack should already be up (Shivansh): STT :9000, TTS :8880, Ollama :11434
+4. `bash scripts/setup_venv.sh` then `bash scripts/run_voice.sh` (from `~/dell-hack`)
+5. **Plug USB mic** — stock GB10 has no built-in capture device
+6. Optional: `bash scripts/run_fake_dashboard.sh` (dashboard :3001 not running)
+7. `bash scripts/check_services.sh` — STT/TTS/Ollama should be OK
+8. Seed DBs if needed: `python3 scripts/init_m3_test_db.py`
+
+Voice path: **SQLite context → Ollama direct** (no OpenClaw hop). Energy VAD without torch is expected.
 
 ## Branches (June 14, 2026)
 
@@ -52,10 +51,10 @@ Target merge: `integrate-dafely-from-pr` → `main`.
 
 ## New Conductor workspace?
 
-1. Read this file and [testing-runbook.md](testing-runbook.md)
-2. Check `.context/README.md` if present for workspace-specific notes
-3. Run unit tests before touching voice hardware
-4. SSH to Dell using [dell-gbio-access.md](dell-gbio-access.md)
+1. **[dell-gbio-runbook.md](dell-gbio-runbook.md)** — confirmed GB10 setup (read first)
+2. This file and [testing-runbook.md](testing-runbook.md)
+3. `.context/README.md` if present for workspace-specific notes
+4. `bash scripts/check_services.sh` on Dell after SSH
 
 ## Demo script (2 min)
 
