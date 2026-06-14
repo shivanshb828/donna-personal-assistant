@@ -31,7 +31,15 @@ CHANNELS = 1
 MAX_RECORD_SECONDS = 30
 
 OLLAMA_URL = os.getenv("DONNA_OLLAMA_URL", "http://localhost:11434/api/generate")
-OLLAMA_MODEL = os.getenv("DONNA_MODEL", "nemotron-3-super")
+OLLAMA_MODEL = os.getenv("DONNA_MODEL", "nemotron-3-nano")
+OLLAMA_MODEL_FALLBACKS = [
+    m.strip()
+    for m in os.getenv(
+        "DONNA_MODEL_FALLBACKS",
+        "nemotron-3-nano,nemotron-3-super",
+    ).split(",")
+    if m.strip()
+]
 CONTEXT_DB = Path(
     os.getenv("DONNA_CONTEXT_DB", str(_REPO_ROOT / "data/donna_m3_context.sqlite"))
 )
@@ -68,17 +76,34 @@ def _build_ollama_prompt(text: str, context_block: str) -> str:
 
 
 async def _query_ollama(text: str, context_block: str = "") -> str:
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        resp = await client.post(
-            OLLAMA_URL,
-            json={
-                "model": OLLAMA_MODEL,
-                "prompt": _build_ollama_prompt(text, context_block),
-                "stream": False,
-            },
-        )
-    resp.raise_for_status()
-    return resp.json().get("response", "").strip()
+    models: list[str] = []
+    for name in [OLLAMA_MODEL, *OLLAMA_MODEL_FALLBACKS]:
+        if name not in models:
+            models.append(name)
+
+    last_error: Exception | None = None
+    prompt = _build_ollama_prompt(text, context_block)
+
+    for model in models:
+        try:
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                resp = await client.post(
+                    OLLAMA_URL,
+                    json={"model": model, "prompt": prompt, "stream": False},
+                )
+            resp.raise_for_status()
+            body = resp.json().get("response", "").strip()
+            if body:
+                if model != models[0]:
+                    print(f"[Ollama fallback model: {model}]")
+                return body
+        except Exception as exc:
+            last_error = exc
+            print(f"[Ollama error for {model}: {exc}]")
+
+    if last_error:
+        raise last_error
+    return ""
 
 
 def _test_mic(pa: pyaudio.PyAudio):
@@ -100,8 +125,27 @@ def _test_mic(pa: pyaudio.PyAudio):
     print("Mic test done.")
 
 
+async def _run_text_query(text: str) -> None:
+    context_block = lookup_context_block(text, db_path=CONTEXT_DB)
+    if context_block:
+        print("[Loaded case context from local DB]")
+    print(f"You: {text}")
+    print("Donna thinking...")
+    response = await _query_ollama(text, context_block)
+    print(f"Donna: {response}")
+
+
 async def main():
     args = sys.argv[1:]
+
+    if "--text" in args:
+        idx = args.index("--text")
+        if idx + 1 >= len(args):
+            print("Usage: python -m donna.voice.pipeline --text \"your message\"")
+            return
+        await _run_text_query(args[idx + 1])
+        return
+
     pa = pyaudio.PyAudio()
 
     if "--test-mic" in args:

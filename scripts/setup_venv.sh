@@ -20,6 +20,7 @@ APT_PACKAGES=(
   python3-numpy
   python3-httpx
   python3-websockets
+  python3-pytest
 )
 
 missing=()
