@@ -1,0 +1,72 @@
+// OpenClaw configuration for Donna
+// Deploy to: ~/.openclaw/openclaw.json on the GBIO
+// JSON5 format — comments and trailing commas allowed
+
+{
+  // ── Gateway ────────────────────────────────────────────────────────────────
+  gateway: {
+    port: 18789,
+    bind: "loopback",           // local only — no external exposure
+    auth: { mode: "token", token: "${OPENCLAW_GATEWAY_TOKEN}" },
+    controlUi: { enabled: true, basePath: "/openclaw" },
+  },
+
+  // ── Model — Ollama local inference ────────────────────────────────────────
+  // Model: qwen2.5:72b — replaces Nemotron 120B (too slow for real-time voice)
+  // ~45GB, best-in-class tool calling, ~3x faster on GB10 unified memory
+  // Fallback: llama3.3:70b (~40GB)
+  models: {
+    providers: {
+      ollama: {
+        localService: {
+          command: "/usr/bin/ollama",
+          args: ["serve"],
+          healthEndpoint: "http://localhost:11434/api/tags",
+        },
+      },
+    },
+  },
+
+  // ── Agents ────────────────────────────────────────────────────────────────
+  agents: {
+    // ── Donna — lawyer-facing agent ─────────────────────────────────────────
+    donna: {
+      model: "ollama/donna",              // registered via: ollama create donna -f agent/Modelfile
+      systemPrompt: { $include: "./agent/system_prompt.md" },
+      thinking: "enabled",
+      memory: { memorySearch: { enabled: true } },
+    },
+
+    // ── Voice agent — client-facing intake ──────────────────────────────────
+    // Separate agent: different persona, restricted tool set (create_case_file only)
+    // M4 feeds Whisper transcripts as text into this agent's session
+    voice: {
+      model: "ollama/donna",              // same base model, different system prompt
+      systemPrompt: { $include: "./agent/voice_prompt.md" },
+      thinking: "off",                    // lower latency for voice turn-around
+      memory: { memorySearch: { enabled: false } },
+    },
+  },
+
+  // ── MCP Servers — tool layer ──────────────────────────────────────────────
+  mcp: {
+    servers: {
+      // GBrain — memory, vector search, knowledge graph (74 tools exposed natively)
+      gbrain: {
+        url: "http://localhost:7701",
+        transport: "streamable-http",
+      },
+
+      // Donna tools — our Python tool layer (calendar, case files, case law)
+      // Runs as a local MCP server via tools/mcp_server.py
+      donna_tools: {
+        command: "/gbio/donna/.venv/bin/python",
+        args: ["/gbio/donna/tools/mcp_server.py"],
+        env: {
+          GBRAIN_DSN: "postgresql://donna@localhost:7700/donna",
+          COURTLISTENER_TOKEN: "${COURTLISTENER_TOKEN}",
+        },
+      },
+    },
+  },
+}

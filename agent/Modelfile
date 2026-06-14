@@ -1,7 +1,7 @@
-FROM nemotron3-super-120b
+FROM qwen2.5:72b
 
-# Quantization: Q4_K_M balances quality and VRAM on the GB10
-# At 120B params this lands ~87GB on disk; fits in unified memory with room for KV cache
+# Switched from Nemotron 3 Super 120B — too slow for real-time voice turns.
+# Qwen2.5-72B: best-in-class tool calling, ~45GB, ~3x faster on GB10 unified memory.
 PARAMETER temperature 0.3
 PARAMETER top_p 0.9
 PARAMETER top_k 40
