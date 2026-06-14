@@ -20,11 +20,12 @@ from tools.intake import intake_client, create_case_file, TOOL_DEFINITIONS as IN
 from tools.calendar import book_calendar, get_upcoming, TOOL_DEFINITIONS as CALENDAR_TOOLS
 from tools.cases import get_status, check_deadline, get_deadlines, TOOL_DEFINITIONS as CASES_TOOLS
 from tools.search import search_cases, summarize_document, TOOL_DEFINITIONS as SEARCH_TOOLS
+from tools.email_sender import send_intake_email, TOOL_DEFINITIONS as EMAIL_TOOLS
 
 OLLAMA_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 MODEL = os.environ.get("DONNA_LLM_MODEL", "qwen2.5:14b")
 
-ALL_TOOLS = INTAKE_TOOLS + CALENDAR_TOOLS + CASES_TOOLS + SEARCH_TOOLS
+ALL_TOOLS = INTAKE_TOOLS + CALENDAR_TOOLS + CASES_TOOLS + SEARCH_TOOLS + EMAIL_TOOLS
 
 TOOL_DISPATCH = {
     "intake_client": intake_client,
@@ -36,6 +37,7 @@ TOOL_DISPATCH = {
     "get_upcoming_deadlines": get_deadlines,
     "search_cases": search_cases,
     "summarize_document": summarize_document,
+    "send_intake_email": send_intake_email,
 }
 
 

@@ -8,6 +8,7 @@ from uuid import uuid4
 from donna.glue.test_data import connect as connect_context, init_context_db
 from donna.glue.tools.calendar import book_calendar
 from donna.telephony import db as telephony_db
+from donna.tools.email_sender import send_intake_email, TOOL_DEFINITIONS as EMAIL_TOOL_DEFINITIONS
 
 
 @dataclass(frozen=True)
@@ -168,7 +169,7 @@ TOOL_DEFINITIONS = [
             },
         },
     },
-]
+] + EMAIL_TOOL_DEFINITIONS
 
 
 class ToolRegistry:
@@ -213,6 +214,7 @@ class ToolRegistry:
             "case.decline": self._case_decline,
             "calendar.create_event": self._calendar_create_event,
             "notify.dashboard": self._notify_dashboard,
+            "send_intake_email": self._send_intake_email,
         }
         handler = handlers.get(tool_name)
         if not handler:
@@ -392,3 +394,18 @@ class ToolRegistry:
             call_session_id=call_sid,
         )
         return ToolResult(ok=True, data={"sent": True, "body": body})
+
+    def _send_intake_email(self, call_sid: str, args: dict) -> ToolResult:
+        case_id = args.get("case_id") or self._case_ids.get(call_sid)
+        if not case_id:
+            return ToolResult(ok=False, data={}, error="No case_id available — call case.create first")
+        result = send_intake_email(
+            case_id=case_id,
+            client_name=args.get("client_name", "Unknown Client"),
+            incident_summary=args.get("incident_summary", ""),
+            incident_type=args.get("incident_type", "other"),
+            incident_date=args.get("incident_date", ""),
+            injuries=args.get("injuries", ""),
+            attorney_email=args.get("attorney_email", ""),
+        )
+        return ToolResult(ok=True, data=result)

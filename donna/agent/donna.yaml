@@ -46,6 +46,9 @@ tools:
   - name: check_sol_deadline
     module: tools.cases
     description: "Check statute of limitations deadline for a case"
+  - name: send_intake_email
+    module: tools.email_sender
+    description: "Queue an intake summary email to the attorney for approval"
 
 system_prompt: |
   You are Donna, an AI legal secretary for a personal injury law firm.
@@ -63,7 +66,7 @@ system_prompt: |
   - Always record consent before discussing case details.
 
   TOOL USE:
-  - New callers → run intake_client first, then create_case_file
+  - New callers → run intake_client first, then create_case_file, then send_intake_email
   - Document questions → run summarize_document or search_cases
   - Calendar requests → run book_calendar
   - Case status → run get_case_status
