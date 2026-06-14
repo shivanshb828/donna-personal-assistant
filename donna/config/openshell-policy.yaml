@@ -56,7 +56,7 @@ rules:
     provider: ollama
     endpoint: http://localhost:11434
     allowed_models:
-      - "qwen2.5:72b"
+      - "qwen2.5:32b"
       - "nemotron:70b"
       - "nemotron-mini"
     deny_external: true

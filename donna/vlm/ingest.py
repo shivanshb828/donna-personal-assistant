@@ -2,7 +2,7 @@
 VLM document ingest server — localhost:8765/ingest
 
 Receives document_ingest envelopes from the email router.
-Runs qwen2.5-vl via Ollama to extract text/meaning from attachments.
+Runs qwen2.5vl via Ollama to extract text/meaning from attachments.
 Stores result in SQLite (documents table) + ChromaDB for semantic search.
 
 Envelope: { source, session_id, text: "/path/to/file", type: "document_ingest",
@@ -36,7 +36,7 @@ except ImportError:
 from donna.telephony.config import TelephonyConfig
 
 OLLAMA_URL   = os.getenv("DONNA_OLLAMA_URL", "http://localhost:11434")
-VLM_MODEL    = os.getenv("DONNA_VLM_MODEL", "qwen2.5-vl:latest")
+VLM_MODEL    = os.getenv("DONNA_VLM_MODEL", "qwen2.5vl:7b")
 CHROMA_HOST  = os.getenv("CHROMA_HOST", "localhost")
 CHROMA_PORT  = int(os.getenv("CHROMA_PORT", "8001"))
 
@@ -83,7 +83,7 @@ async def ingest(envelope: IngestEnvelope):
         log.error("File not found: %s", file_path)
         return {"status": "error", "message": f"File not found: {file_path}"}
 
-    # ── Run qwen2.5-vl via Ollama ────────────────────────────────────────────
+    # ── Run qwen2.5vl via Ollama ────────────────────────────────────────────
     summary = await _run_vlm(file_path, doc_type)
     log.info("VLM summary | case=%s file=%s summary_len=%d", case_id, filename, len(summary))
 
@@ -113,7 +113,7 @@ async def ingest(envelope: IngestEnvelope):
 
 
 async def _run_vlm(file_path: Path, doc_type: str) -> str:
-    """Send file to qwen2.5-vl via Ollama and return extracted summary."""
+    """Send file to qwen2.5vl via Ollama and return extracted summary."""
     suffix = file_path.suffix.lower()
 
     # Encode file as base64 for Ollama multimodal input

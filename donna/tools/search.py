@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from knowledge.chroma_store import search_documents
 
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.environ.get("DONNA_LLM_MODEL", "qwen2.5:72b")
+OLLAMA_MODEL = os.environ.get("DONNA_LLM_MODEL", "qwen2.5:32b")
 
 
 TOOL_DEFINITIONS = [
