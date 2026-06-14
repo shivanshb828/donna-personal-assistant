@@ -321,6 +321,31 @@ def create_app(config: TelephonyConfig | None = None) -> FastAPI:
             return JSONResponse({"error": "not found"}, status_code=404)
         return JSONResponse({"session": session.__dict__})
 
+    @app.post("/api/emails/{draft_id}/approve")
+    async def api_approve_email(draft_id: str, request: Request) -> JSONResponse:
+        from donna.email_server.sender import approve_and_send
+        body = await request.json()
+        case_id = body.get("case_id", "")
+        if not case_id:
+            return JSONResponse({"error": "case_id is required"}, status_code=400)
+        result = await approve_and_send(draft_id=draft_id, case_id=case_id)
+        if result.get("status") == "error":
+            return JSONResponse(result, status_code=422)
+        return JSONResponse(result)
+
+    @app.post("/api/emails/{draft_id}/reject")
+    async def api_reject_email(draft_id: str, request: Request) -> JSONResponse:
+        from donna.email_server.sender import reject_draft
+        body = await request.json()
+        case_id = body.get("case_id", "")
+        reason = body.get("reason", "")
+        if not case_id:
+            return JSONResponse({"error": "case_id is required"}, status_code=400)
+        result = await reject_draft(draft_id=draft_id, case_id=case_id, reason=reason)
+        if result.get("status") == "error":
+            return JSONResponse(result, status_code=422)
+        return JSONResponse(result)
+
     return app
 
 

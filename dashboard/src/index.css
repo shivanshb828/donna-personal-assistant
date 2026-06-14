@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: #F0F4F8;
+    color: #1E293B;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94A3B8;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Live call glow ring on status dot */
+.dot-live {
+  animation: dotLive 2s ease-in-out infinite;
+}
+
+@keyframes dotLive {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+  50%       { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+}
+
+/* Workflow step pulse when active */
+.step-active-ring {
+  animation: stepActiveRing 1.8s ease-in-out infinite;
+}
+
+@keyframes stepActiveRing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45); }
+  50%       { box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
+}
+
+/* Transcript message entry */
+.msg-enter {
+  animation: msgEnter 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes msgEnter {
+  from { transform: translateY(8px); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+
+/* Activity card entry */
+.activity-enter {
+  animation: activityEnter 0.22s ease-out;
+}
+
+@keyframes activityEnter {
+  from { transform: translateX(10px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* Call banner shimmer */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.call-banner-shimmer {
+  background: linear-gradient(
+    90deg,
+    #1D4ED8 0%,
+    #2563EB 40%,
+    #3B82F6 60%,
+    #1D4ED8 100%
+  );
+  background-size: 200% auto;
+  animation: shimmer 4s linear infinite;
+}
+
+/* Donna speaking wave */
+.speaking-wave span {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: wave 1.2s ease-in-out infinite;
+}
+.speaking-wave span:nth-child(2) { animation-delay: 0.15s; }
+.speaking-wave span:nth-child(3) { animation-delay: 0.30s; }
+
+@keyframes wave {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%            { transform: translateY(-6px); }
+}

@@ -5,3 +5,4 @@ openclaw/workspace/
 .venv/
 data/donna_telephony.sqlite
 donna/data/donna_telephony.sqlite
+.gstack/
