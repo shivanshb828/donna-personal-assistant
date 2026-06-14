@@ -1,0 +1,36 @@
+# Donna AI Legal Secretary — Python dependencies
+# Install: pip install -r requirements.txt
+
+# Audio I/O
+pyaudio>=0.2.14
+
+# Voice Activity Detection
+silero-vad>=6.0
+torch>=2.0
+
+# Wake Word Detection
+openwakeword>=0.6
+
+# HTTP client (for Whisper, Kokoro, Ollama APIs)
+httpx>=0.27
+
+# Database
+chromadb>=0.5
+
+# Date parsing (natural language → ISO dates)
+python-dateutil>=2.9
+
+# YAML config parsing
+pyyaml>=6.0
+
+# Numeric
+numpy>=1.26
+
+# Dashboard WebSocket bridge
+websockets>=12.0
+
+# TTS fallback (Piper — only if Kokoro unavailable)
+# piper-tts>=1.2
+
+# PDF reading (for document ingestion)
+# pypdf>=4.0

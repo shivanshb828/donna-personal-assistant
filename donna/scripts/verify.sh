@@ -1,0 +1,60 @@
+#!/bin/bash
+# Verify all Donna services are running and healthy.
+
+echo "Donna Health Check"
+echo "=================="
+
+PASS=0
+FAIL=0
+
+check() {
+    if eval "$2" > /dev/null 2>&1; then
+        echo "  ✓ $1"
+        PASS=$((PASS + 1))
+    else
+        echo "  ✗ $1"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+echo ""
+echo "Services:"
+check "Ollama running" "pgrep -x ollama"
+check "Ollama model loaded" "ollama ps | grep -q nemotron"
+check "Whisper STT (port 9000)" "curl -sf http://localhost:9000/health"
+check "Kokoro TTS (port 8880)" "curl -sf http://localhost:8880/health"
+check "ChromaDB (port 8001)" "curl -sf http://localhost:8001/api/v1/heartbeat"
+
+echo ""
+echo "Database:"
+check "SQLite DB exists" "test -f knowledge/donna.db"
+check "Clients seeded" "sqlite3 knowledge/donna.db 'SELECT COUNT(*) FROM clients' | grep -v '^0$'"
+check "Cases seeded" "sqlite3 knowledge/donna.db 'SELECT COUNT(*) FROM cases' | grep -v '^0$'"
+
+echo ""
+echo "Security:"
+if command -v openshell &> /dev/null; then
+    check "OpenShell installed" "openshell --version"
+    check "Policy applied" "openshell status | grep -q donna-policy"
+else
+    echo "  ⚠ OpenShell not installed (install NemoClaw first)"
+    FAIL=$((FAIL + 1))
+fi
+
+echo ""
+echo "Python deps:"
+check "pyaudio" "python3 -c 'import pyaudio'"
+check "httpx" "python3 -c 'import httpx'"
+check "chromadb" "python3 -c 'import chromadb'"
+check "numpy" "python3 -c 'import numpy'"
+check "torch" "python3 -c 'import torch'"
+check "pyyaml" "python3 -c 'import yaml'"
+
+echo ""
+echo "=================="
+echo "Results: $PASS passed, $FAIL failed"
+if [ $FAIL -eq 0 ]; then
+    echo "All checks passed. Donna is ready for demo."
+else
+    echo "Fix failures above before demo."
+fi

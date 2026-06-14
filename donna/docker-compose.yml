@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  # Speech-to-Text: faster-whisper-server (OpenAI-compatible API)
+  whisper-stt:
+    image: fedirz/faster-whisper-server:latest-cuda
+    ports:
+      - "9000:8000"
+    environment:
+      - DEFAULT_MODEL=Systran/faster-distil-whisper-large-v3
+    volumes:
+      - whisper_cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # Text-to-Speech: Kokoro-FastAPI (OpenAI-compatible API)
+  kokoro-tts:
+    image: ghcr.io/remsky/kokoro-fastapi-gpu:latest
+    ports:
+      - "8880:8880"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # Vector database for document search
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=false
+    restart: unless-stopped
+
+volumes:
+  whisper_cache:
+  chroma_data:
+
+# NOTE: Ollama runs natively (not in Docker) for best GPU perf on GB10
+# Start with: ollama serve &
+# Pull model: ollama pull nemotron:120b

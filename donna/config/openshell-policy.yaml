@@ -1,0 +1,63 @@
+# OpenShell Security Policy for Donna
+# Enforces attorney-client privilege at the OS level.
+# All outbound network traffic is blocked. All inference runs locally.
+# Show this file to judges as proof of local-only execution.
+
+version: 1
+name: donna-attorney-privilege
+description: >
+  Zero-trust policy for Donna AI Legal Secretary.
+  All inference, storage, and processing stays on this machine.
+  No client data ever touches a third-party server.
+
+rules:
+  # Network: localhost only. Everything else denied.
+  network:
+    allow:
+      - host: localhost
+        ports: [9000, 8880, 8001, 11434, 3000, 3001]
+        comment: "whisper-stt, kokoro-tts, chromadb, ollama, dashboard, ws-bridge"
+      - host: 127.0.0.1
+        ports: any
+        comment: "loopback — all local services"
+    deny:
+      - host: "*"
+        comment: "BLOCK ALL OUTBOUND — attorney-client privilege enforcement"
+
+  # Filesystem: only donna project + temp audio
+  filesystem:
+    allow:
+      - path: ./donna/
+        permissions: [read, write]
+      - path: /tmp/donna-audio/
+        permissions: [read, write]
+      - path: /tmp/
+        permissions: [read, write]
+    deny:
+      - path: /etc/
+      - path: /root/.ssh/
+      - path: /home/
+
+  # Process: only allow expected binaries
+  process:
+    allow:
+      - binary: python3
+      - binary: ollama
+      - binary: docker
+      - binary: node
+    deny:
+      - binary: curl
+        comment: "No external downloads during runtime"
+      - binary: wget
+      - binary: ssh
+
+  # Inference: route all LLM calls to local Ollama
+  inference:
+    provider: ollama
+    endpoint: http://localhost:11434
+    allowed_models:
+      - "nemotron:120b"
+      - "nemotron:70b"
+      - "nemotron-mini"
+    deny_external: true
+    comment: "All inference must go through local Ollama. No cloud LLM APIs."

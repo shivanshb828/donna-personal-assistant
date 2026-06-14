@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+knowledge/donna.db
+node_modules/
+dashboard/dist/
+*.egg-info/
+.venv/
+*.onnx
+models/
