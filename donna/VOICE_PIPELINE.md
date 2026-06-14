@@ -39,32 +39,61 @@ Dashboard WebSocket (localhost:3001) — status + transcript events
 
 ## Setup
 
+**Ubuntu / Dell GB10 (required — system pip is blocked on 24.04):**
+
 ```bash
-# Install system deps (macOS)
+cd ~/dell-hack
+git pull
+bash scripts/setup_venv.sh
+source .venv/bin/activate
+```
+
+Or use wrapper scripts (auto-activate venv):
+
+```bash
+bash scripts/run_fake_dashboard.sh   # terminal 1
+bash scripts/run_voice.sh              # terminal 2
+```
+
+**macOS:**
+
+```bash
 brew install portaudio
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r donna/requirements.txt
+```
 
-# Install Python deps
-pip install -r requirements.txt
+Optional services:
 
-# Optional GPU TTS (Kokoro)
+```bash
+# Kokoro TTS (usually already running in Docker on Dell)
 docker pull ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.2
 docker run -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.2
 
-# Optional Piper binary fallback
+# Piper binary fallback
 pip install piper-tts
 piper --update-voices --model en_US-amy-medium
 ```
 
 ## Run
 
+**Dell / Ubuntu — use venv wrappers from repo root:**
+
+```bash
+bash scripts/run_fake_dashboard.sh   # terminal 1 (optional)
+bash scripts/run_voice.sh            # terminal 2
+```
+
+**Or with venv activated (`source .venv/bin/activate`):**
+
 **Terminal 1 — fake dashboard (dev only):**
 ```bash
-python fake_dashboard.py
+python donna/fake_dashboard.py
 ```
 
 **Terminal 2 — voice pipeline:**
 ```bash
-python -m voice.pipeline
+cd donna && python -m voice.pipeline
 ```
 
 Press **ENTER** to speak. Donna auto-stops when you go silent (~800ms).

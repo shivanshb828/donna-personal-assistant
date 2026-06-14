@@ -128,4 +128,6 @@ Then run voice pipeline on your Mac with defaults unchanged, or run everything o
 | STT 9000 down | `curl -s -o /dev/null -w '%{http_code}' localhost:9000` on Dell |
 | Ollama empty | `curl localhost:11434/api/tags` — run `ollama pull nemotron` |
 | Voice no context | `python3 scripts/context_lookup.py Maria` — re-run `init_m3_test_db.py` |
-| OpenClaw missing | `which openclaw` — M2 agent not installed yet; pipeline falls back to Ollama |
+| `externally-managed-environment` on pip | Run `bash scripts/setup_venv.sh`, then `source .venv/bin/activate` |
+| `No module named pyaudio` / `websockets` | Same — deps install into `.venv`, not system Python |
+| OpenClaw missing | Optional — voice calls Ollama directly |

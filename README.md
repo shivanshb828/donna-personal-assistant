@@ -14,6 +14,8 @@ pip install -r requirements.txt
 python3 -m voice.pipeline
 ```
 
+On **Ubuntu 24.04 / Dell**, use a venv first (`bash scripts/setup_venv.sh`) — see [donna/VOICE_PIPELINE.md](donna/VOICE_PIPELINE.md).
+
 When the M3 seed DB is present, voice queries inject matching case context, then call **Ollama directly** (no OpenClaw hop).
 
 ## M2 Agent + GBrain (OpenClaw)
