@@ -1,0 +1,83 @@
+VALLEY MEDICAL CENTER — EMERGENCY DEPARTMENT
+2400 Hospital Dr., San Jose, CA 95128
+Tel: (408) 885-5000
+
+EMERGENCY DEPARTMENT VISIT SUMMARY
+
+Patient:               Sarah Chen
+DOB:                   February 14, 1990
+MRN:                   VMC-2026-88341
+Date of Visit:         March 4, 2026
+Time of Arrival:       10:22 AM
+Time of Discharge:     12:48 PM
+Attending Physician:   Dr. Anika Patel, MD (Emergency Medicine)
+
+---
+
+CHIEF COMPLAINT
+
+Patient presents the day following a motor vehicle accident (rear-end collision) on March 3,
+2026. Reports persistent neck pain, upper back pain, and new onset headache since the
+accident. Rates pain 7/10 at rest, 9/10 with movement.
+
+---
+
+HISTORY OF PRESENT ILLNESS
+
+Sarah Chen is a 36-year-old female who presents with cervical and thoracic pain following a
+rear-end MVA on 3/3/2026. Patient reports she was stopped at a red light when struck from
+behind by a pickup truck. She declined EMS transport at the scene. Pain worsened overnight.
+No loss of consciousness reported. No numbness or tingling in upper extremities at this time.
+Patient denies prior neck or back injuries.
+
+---
+
+PHYSICAL EXAMINATION
+
+Vitals: BP 118/74 | HR 82 | Temp 98.6°F | SpO2 99%
+
+Cervical Spine: Tenderness to palpation at C4-C6 midline and bilateral paraspinal musculature.
+Range of motion limited — flexion and rotation painful. No bony step-off.
+
+Thoracic Spine: Mild tenderness at T2-T4 paraspinal region bilaterally.
+
+Neurological: Alert and oriented x4. Upper extremity strength 5/5 bilaterally. Sensation
+intact. Deep tendon reflexes normal.
+
+---
+
+DIAGNOSTIC IMAGING
+
+Cervical X-Ray (3 views): No acute fracture or dislocation identified. Straightening of
+cervical lordosis noted, consistent with muscle spasm.
+
+---
+
+DIAGNOSIS
+
+1. Cervical strain (whiplash) — ICD-10: S13.4XXA
+2. Thoracic strain — ICD-10: S23.3XXA
+3. Post-traumatic headache — ICD-10: G44.309
+
+---
+
+TREATMENT PROVIDED
+
+- Toradol (ketorolac) 30mg IV administered for pain management
+- Cervical soft collar provided for comfort
+- Patient education on home ice/heat protocol
+
+---
+
+DISCHARGE INSTRUCTIONS
+
+Patient discharged in stable condition. Instructions given:
+- Follow up with primary care physician within 5-7 days
+- Referral provided to Dr. James Okonkwo, Orthopedic Spine (408-555-0310)
+- Prescription: Cyclobenzaprine 5mg TID x 7 days, Naproxen 500mg BID x 10 days
+- Return to ED if symptoms worsen, numbness develops, or any red flag symptoms
+
+---
+
+Attending Physician: Dr. Anika Patel, MD
+Date Signed: March 4, 2026
