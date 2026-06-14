@@ -95,7 +95,7 @@ Confirmed on `promaxgb10-887e` (2026-06-14):
 Ollama model on box (June 14):
 
 ```bash
-export DONNA_MODEL=nemotron-3-super
+export DONNA_MODEL=nemotron-3-nano
 ```
 
 Quick health check on the Dell:
@@ -145,7 +145,7 @@ ALSA/JACK warnings on pipeline startup are harmless.
 | `cd dell-hack: No such file or directory` | Run `git clone https://github.com/shivanshb828/dell-hack.git` from `~` first |
 | SSH refused | Confirm you're on event Wi‑Fi / VPN; try alternate IP from table above |
 | STT 9000 down | `curl -s -o /dev/null -w '%{http_code}' localhost:9000` on Dell |
-| Ollama empty | `curl localhost:11434/api/tags` — run `ollama pull nemotron` |
+| Ollama empty | `curl localhost:11434/api/tags` — run `ollama pull nemotron-3-nano` |
 | Voice no context | `python3 scripts/context_lookup.py Maria` — re-run `init_m3_test_db.py` |
 | `externally-managed-environment` on pip | Run `bash scripts/setup_venv.sh` from `~/dell-hack` |
 | `No module named pyaudio` / `httpx` | Same — uses apt + venv; do not `pip install` system-wide |

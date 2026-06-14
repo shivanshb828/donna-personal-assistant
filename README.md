@@ -39,6 +39,7 @@ bash scripts/run_telephony.sh       # Twilio agent on :3002
 | [dell-gbio-access.md](docs/dell-gbio-access.md) | SSH, ports, troubleshooting |
 | [twilio-setup.md](docs/twilio-setup.md) | Twilio + ngrok telephony setup |
 | [voice-telephony-architecture.md](docs/voice-telephony-architecture.md) | Phone agent architecture |
+| [dell-ssh-agent-prompt.md](docs/dell-ssh-agent-prompt.md) | **Copy-paste system prompt for SSH agent on GB10** |
 | [testing-runbook.md](docs/testing-runbook.md) | All test commands |
 | [hackathon-quickstart.md](docs/hackathon-quickstart.md) | Team, modules, demo |
 | [storage-architecture.md](docs/storage-architecture.md) | SQLite / OpenClaw / GBrain |

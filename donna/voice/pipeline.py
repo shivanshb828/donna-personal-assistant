@@ -1,5 +1,5 @@
 """
-Donna voice pipeline — push-to-talk mode.
+Donna voice pipeline - push-to-talk mode.
 Press ENTER to start recording. Donna auto-stops when you go silent.
 """
 
@@ -7,17 +7,23 @@ import asyncio
 import io
 import os
 import sys
+import time
 import wave
+from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-import httpx
 import pyaudio
 
-from donna.glue.context_bridge import lookup_context_block
+from donna.glue.router.session_router import RouterResult, SessionRouter
+from donna.glue.tools.registry import ToolRegistry
+from donna.telephony.config import TelephonyConfig
+from donna.telephony.db import create_call_session
+from donna.telephony.llm import DonnaLLM
 
 from .stt import transcribe_audio
 from .tts import play_audio, synthesize
@@ -30,19 +36,56 @@ FORMAT = pyaudio.paInt16
 CHANNELS = 1
 MAX_RECORD_SECONDS = 30
 
-OLLAMA_URL = os.getenv("DONNA_OLLAMA_URL", "http://localhost:11434/api/generate")
-OLLAMA_MODEL = os.getenv("DONNA_MODEL", "nemotron-3-nano")
-OLLAMA_MODEL_FALLBACKS = [
-    m.strip()
-    for m in os.getenv(
-        "DONNA_MODEL_FALLBACKS",
-        "nemotron-3-nano,nemotron-3-super",
-    ).split(",")
-    if m.strip()
-]
-CONTEXT_DB = Path(
-    os.getenv("DONNA_CONTEXT_DB", str(_REPO_ROOT / "data/donna_m3_context.sqlite"))
-)
+LOCAL_AGENT_MODE = "local_assistant"
+
+
+@dataclass(frozen=True)
+class LocalVoiceRuntime:
+    session_id: str
+    router: SessionRouter
+
+
+def _create_local_voice_runtime() -> LocalVoiceRuntime:
+    cfg = TelephonyConfig.from_env()
+    session_id = os.getenv("DONNA_LOCAL_SESSION_ID", f"local-{uuid4().hex[:12]}")
+    create_call_session(
+        cfg.telephony_db,
+        call_sid=session_id,
+        phone=None,
+        agent_mode=LOCAL_AGENT_MODE,
+        is_returning=False,
+    )
+    router = SessionRouter(
+        telephony_db_path=cfg.telephony_db,
+        context_db_path=cfg.context_db,
+        calendar_db_path=cfg.calendar_db,
+        llm=DonnaLLM(ollama_url=cfg.ollama_url, model=cfg.ollama_model),
+        tools=ToolRegistry(
+            telephony_db_path=cfg.telephony_db,
+            context_db_path=cfg.context_db,
+            calendar_db_path=cfg.calendar_db,
+        ),
+        firm_name=cfg.firm_name,
+    )
+    return LocalVoiceRuntime(session_id=session_id, router=router)
+
+
+def _seconds_since(started: float) -> float:
+    return round(time.perf_counter() - started, 3)
+
+
+def _print_turn_timing(timing: dict) -> None:
+    parts = [
+        f"{key}={value:.3f}s"
+        for key, value in timing.items()
+        if isinstance(value, int | float)
+    ]
+    print(f"[Timing] {' '.join(parts)}")
+
+
+async def _emit_turn_timing(runtime: LocalVoiceRuntime, timing: dict) -> None:
+    _print_turn_timing(timing)
+    await _emit_local_event(runtime, {"type": "turn_timing", **timing})
 
 
 def _record_until_silence(pa: pyaudio.PyAudio) -> bytes:
@@ -64,46 +107,31 @@ def _record_until_silence(pa: pyaudio.PyAudio) -> bytes:
     return collected
 
 
-def _build_ollama_prompt(text: str, context_block: str) -> str:
-    parts = [
-        "You are Donna, a professional AI legal secretary for a personal injury law firm. "
-        "Keep responses concise (1-2 sentences). No legal advice.",
-    ]
-    if context_block:
-        parts.append(context_block)
-    parts.append(f"Client: {text}\nDonna:")
-    return "\n\n".join(parts)
+async def _emit_local_event(runtime: LocalVoiceRuntime, event: dict) -> None:
+    enriched = {
+        **event,
+        "callSid": runtime.session_id,
+        "sessionId": runtime.session_id,
+    }
+    await emit_to_dashboard(enriched)
 
 
-async def _query_ollama(text: str, context_block: str = "") -> str:
-    models: list[str] = []
-    for name in [OLLAMA_MODEL, *OLLAMA_MODEL_FALLBACKS]:
-        if name not in models:
-            models.append(name)
+async def _run_router_turn(runtime: LocalVoiceRuntime, text: str) -> RouterResult:
+    return await asyncio.to_thread(
+        runtime.router.handle_turn,
+        call_sid=runtime.session_id,
+        user_text=text,
+        agent_mode=LOCAL_AGENT_MODE,
+    )
 
-    last_error: Exception | None = None
-    prompt = _build_ollama_prompt(text, context_block)
 
-    for model in models:
-        try:
-            async with httpx.AsyncClient(timeout=180.0) as client:
-                resp = await client.post(
-                    OLLAMA_URL,
-                    json={"model": model, "prompt": prompt, "stream": False},
-                )
-            resp.raise_for_status()
-            body = resp.json().get("response", "").strip()
-            if body:
-                if model != models[0]:
-                    print(f"[Ollama fallback model: {model}]")
-                return body
-        except Exception as exc:
-            last_error = exc
-            print(f"[Ollama error for {model}: {exc}]")
-
-    if last_error:
-        raise last_error
-    return ""
+async def _handle_local_turn(runtime: LocalVoiceRuntime, text: str) -> RouterResult:
+    await _emit_local_event(runtime, {"type": "user_speech", "text": text})
+    result = await _run_router_turn(runtime, text)
+    for tool_result in result.tool_results:
+        await _emit_local_event(runtime, {"type": "tool_result", **tool_result})
+    await _emit_local_event(runtime, {"type": "donna_speech", "text": result.reply})
+    return result
 
 
 def _test_mic(pa: pyaudio.PyAudio):
@@ -125,14 +153,21 @@ def _test_mic(pa: pyaudio.PyAudio):
     print("Mic test done.")
 
 
-async def _run_text_query(text: str) -> None:
-    context_block = lookup_context_block(text, db_path=CONTEXT_DB)
-    if context_block:
-        print("[Loaded case context from local DB]")
+async def _run_text_query(text: str, runtime: LocalVoiceRuntime | None = None) -> None:
+    runtime = runtime or _create_local_voice_runtime()
+    total_started = time.perf_counter()
     print(f"You: {text}")
     print("Donna thinking...")
-    response = await _query_ollama(text, context_block)
-    print(f"Donna: {response}")
+    llm_started = time.perf_counter()
+    result = await _handle_local_turn(runtime, text)
+    print(f"Donna: {result.reply}")
+    await _emit_turn_timing(
+        runtime,
+        {
+            "llm_seconds": _seconds_since(llm_started),
+            "total_seconds": _seconds_since(total_started),
+        },
+    )
 
 
 async def main():
@@ -147,6 +182,7 @@ async def main():
         return
 
     pa = pyaudio.PyAudio()
+    runtime = _create_local_voice_runtime()
 
     if "--test-mic" in args:
         _test_mic(pa)
@@ -158,60 +194,76 @@ async def main():
     print("  Press ENTER to speak. Ctrl+C to quit.")
     print("=" * 50)
 
-    await emit_to_dashboard({"type": "pipeline_status", "status": "ready"})
+    await _emit_local_event(runtime, {"type": "pipeline_status", "status": "ready"})
 
     try:
         while True:
             input("\n[Press ENTER to speak to Donna]")
 
-            await emit_to_dashboard({"type": "pipeline_status", "status": "listening"})
+            total_started = time.perf_counter()
+            await _emit_local_event(runtime, {"type": "pipeline_status", "status": "listening"})
 
+            record_started = time.perf_counter()
             audio = _record_until_silence(pa)
-            if len(audio) < RATE * 2 * 0.5:  # less than 0.5s → skip
+            recording_seconds = _seconds_since(record_started)
+            if len(audio) < RATE * 2 * 0.5:  # less than 0.5s -> skip
                 print("[Too short, try again]")
-                await emit_to_dashboard({"type": "pipeline_status", "status": "ready"})
+                await _emit_local_event(runtime, {"type": "pipeline_status", "status": "ready"})
                 continue
 
-            await emit_to_dashboard({"type": "pipeline_status", "status": "processing"})
+            await _emit_local_event(runtime, {"type": "pipeline_status", "status": "processing"})
 
             print("Transcribing...")
             try:
+                stt_started = time.perf_counter()
                 user_text = transcribe_audio(audio)
+                stt_seconds = _seconds_since(stt_started)
             except Exception as e:
                 print(f"[STT error: {e}]")
-                await emit_to_dashboard({"type": "pipeline_status", "status": "ready"})
+                await _emit_local_event(runtime, {"type": "pipeline_status", "status": "ready"})
                 continue
 
             if not user_text:
                 print("[Nothing heard, try again]")
-                await emit_to_dashboard({"type": "pipeline_status", "status": "ready"})
+                await _emit_local_event(runtime, {"type": "pipeline_status", "status": "ready"})
                 continue
 
             print(f"You: {user_text}")
-            await emit_to_dashboard({"type": "user_speech", "text": user_text})
-
-            context_block = lookup_context_block(user_text, db_path=CONTEXT_DB)
-            if context_block:
-                print("[Loaded case context from local DB]")
-
             print("Donna thinking...")
             try:
-                response = await _query_ollama(user_text, context_block)
+                llm_started = time.perf_counter()
+                result = await _handle_local_turn(runtime, user_text)
+                llm_seconds = _seconds_since(llm_started)
+                response = result.reply
             except Exception as e:
                 print(f"[Agent error: {e}]")
                 response = "I'm sorry, I'm having trouble connecting right now."
+                llm_seconds = _seconds_since(llm_started)
 
             print(f"Donna: {response}")
-            await emit_to_dashboard({"type": "donna_speech", "text": response})
-            await emit_to_dashboard({"type": "pipeline_status", "status": "speaking"})
+            await _emit_local_event(runtime, {"type": "pipeline_status", "status": "speaking"})
 
             try:
+                tts_started = time.perf_counter()
                 audio_out = synthesize(response)
                 play_audio(audio_out)
+                tts_seconds = _seconds_since(tts_started)
             except Exception as e:
                 print(f"[TTS error: {e}]")
+                tts_seconds = _seconds_since(tts_started)
 
-            await emit_to_dashboard({"type": "pipeline_status", "status": "ready"})
+            await _emit_turn_timing(
+                runtime,
+                {
+                    "recording_seconds": recording_seconds,
+                    "stt_seconds": stt_seconds,
+                    "llm_seconds": llm_seconds,
+                    "tts_seconds": tts_seconds,
+                    "total_seconds": _seconds_since(total_started),
+                },
+            )
+
+            await _emit_local_event(runtime, {"type": "pipeline_status", "status": "ready"})
 
     except KeyboardInterrupt:
         print("\nDonna signing off.")

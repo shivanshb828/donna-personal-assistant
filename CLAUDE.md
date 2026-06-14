@@ -33,7 +33,7 @@ Unit tests: `cd donna && python3 -m pytest voice/tests/ -v` (30/30 mocked)
 - Kokoro-FastAPI port 8880 as primary TTS (GPU); Piper fallback
 - STT: faster-whisper at localhost:9000, model `Systran/faster-distil-whisper-large-v3`
 - VAD: Silero-VAD + EnergyVAD fallback, 800ms silence threshold
-- Agent: **Ollama direct** (`nemotron-3-super` on Dell); OpenClaw optional for M2
+- Agent: **Ollama direct** (`nemotron-3-nano` on Dell); OpenClaw/NemoClaw optional for M2 (not on voice hot path)
 - Dashboard: WebSocket ws://localhost:3001, silent no-op if down
 - Twilio = inbound call entry point (demo centerpiece, not stretch)
 - OS extension framing: Donna runs OS-level tools locally on Dell GB10 — privacy/speed angle
@@ -45,7 +45,7 @@ Unit tests: `cd donna && python3 -m pytest voice/tests/ -v` (30/30 mocked)
 | Voice capture | PyAudio 16kHz mono PCM16 |
 | VAD | Silero-VAD + EnergyVAD fallback |
 | STT | faster-whisper-server (OpenAI-compatible API) |
-| Agent | Ollama HTTP (`nemotron-3-super` on GB10) |
+| Agent | Ollama HTTP (`nemotron-3-nano` on GB10) — **not** via OpenClaw for voice |
 | TTS | Kokoro-FastAPI (GPU) → Piper |
 | Inbound calls | Twilio Media Streams |
 | Dashboard | WebSocket + React |

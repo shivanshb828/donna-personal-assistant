@@ -78,8 +78,11 @@ class LocalVoiceSession:
         if not audio:
             return []
         async with self.turn_lock:
+            total_started = time.perf_counter()
             try:
+                stt_started = time.perf_counter()
                 text = await asyncio.to_thread(transcribe_audio, audio)
+                stt_seconds = time.perf_counter() - stt_started
                 if not text:
                     return []
                 self.transcript_lines.append(f"Caller: {text}")
@@ -94,6 +97,7 @@ class LocalVoiceSession:
                     "callSid": self.call_sid,
                 })
 
+                llm_started = time.perf_counter()
                 result = await asyncio.to_thread(
                     self.router.handle_turn,
                     call_sid=self.call_sid,
@@ -102,6 +106,7 @@ class LocalVoiceSession:
                     caller_name=self.caller_name,
                     is_returning=self.is_returning,
                 )
+                llm_seconds = time.perf_counter() - llm_started
                 self.transcript_lines.append(f"Donna: {result.reply}")
                 for tool_result in result.tool_results:
                     await broadcast_event(self.dashboard_ws, {
@@ -109,7 +114,27 @@ class LocalVoiceSession:
                         "callSid": self.call_sid,
                         **tool_result,
                     })
-                return await self._speak(result.reply)
+                tts_started = time.perf_counter()
+                spoken = await self._speak(result.reply)
+                tts_seconds = time.perf_counter() - tts_started
+                timing = {
+                    "type": "turn_timing",
+                    "callSid": self.call_sid,
+                    "stt_seconds": round(stt_seconds, 3),
+                    "llm_seconds": round(llm_seconds, 3),
+                    "tts_seconds": round(tts_seconds, 3),
+                    "total_seconds": round(time.perf_counter() - total_started, 3),
+                }
+                print(
+                    "[Timing] "
+                    f"callSid={self.call_sid} "
+                    f"stt_seconds={timing['stt_seconds']:.3f}s "
+                    f"llm_seconds={timing['llm_seconds']:.3f}s "
+                    f"tts_seconds={timing['tts_seconds']:.3f}s "
+                    f"total_seconds={timing['total_seconds']:.3f}s"
+                )
+                await broadcast_event(self.dashboard_ws, timing)
+                return spoken
             except Exception as exc:
                 fallback = "I'm sorry, I had trouble processing that. Could you repeat that?"
                 self.transcript_lines.append(f"Donna: {fallback} [{exc}]")

@@ -1,11 +1,12 @@
 from pathlib import Path
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
 
 from donna.glue.router.session_router import SessionRouter
 from donna.glue.tools.registry import ToolRegistry
-from donna.telephony.db import create_call_session, init_telephony_db
+from donna.telephony.db import create_call_session, get_call_session, init_telephony_db, update_call_phase
 from donna.telephony.llm import DonnaLLM, LLMResult
 
 
@@ -46,3 +47,88 @@ def test_handle_turn(router: SessionRouter, tmp_path: Path):
     create_call_session(tmp_path / "telephony.sqlite", call_sid="CA3", phone="+14085550101")
     result = router.handle_turn(call_sid="CA3", user_text="I was in a car accident", agent_mode="inbound_intake")
     assert "help" in result.reply.lower()
+
+
+def test_local_assistant_can_start_intake_without_consent(router: SessionRouter, tmp_path: Path):
+    telephony_db = tmp_path / "telephony.sqlite"
+    create_call_session(telephony_db, call_sid="LOCAL1", phone=None, agent_mode="local_assistant")
+    router.llm.chat.side_effect = [
+        LLMResult(
+            text="",
+            tool_calls=[
+                {
+                    "function": {
+                        "name": "intake.start",
+                        "arguments": {"caller_name": "Maria Lopez"},
+                    }
+                }
+            ],
+        ),
+        LLMResult(text="I've started Maria Lopez's intake. What happened in the incident?"),
+    ]
+
+    result = router.handle_turn(
+        call_sid="LOCAL1",
+        user_text="Start an intake for Maria Lopez",
+        agent_mode="local_assistant",
+    )
+
+    assert result.tool_results[0]["ok"] is True
+    assert get_call_session(telephony_db, "LOCAL1").phase == "INTAKE"
+    first_tools = {
+        tool["function"]["name"]
+        for tool in router.llm.chat.call_args_list[0].kwargs["tools"]
+    }
+    assert "intake.start" in first_tools
+    assert "calendar.create_event" not in first_tools
+
+
+def test_disclosure_phase_gates_telephony_tools(router: SessionRouter, tmp_path: Path):
+    create_call_session(tmp_path / "telephony.sqlite", call_sid="CA4", phone="+14085550101")
+    router.llm.chat.return_value = LLMResult(text="Let me ask a few questions first.")
+
+    router.handle_turn(
+        call_sid="CA4",
+        user_text="Can you book me tomorrow?",
+        agent_mode="inbound_intake",
+    )
+
+    tool_names = {
+        tool["function"]["name"]
+        for tool in router.llm.chat.call_args.kwargs["tools"]
+    }
+    assert "record_consent" in tool_names
+    assert "calendar.create_event" not in tool_names
+
+
+def test_calendar_confirmation_skips_second_llm_turn(router: SessionRouter, tmp_path: Path):
+    telephony_db = tmp_path / "telephony.sqlite"
+    create_call_session(telephony_db, call_sid="LOCAL2", phone=None, agent_mode="local_assistant")
+    update_call_phase(telephony_db, "LOCAL2", "BOOKING")
+    router.llm.chat.side_effect = [
+        LLMResult(
+            text="",
+            tool_calls=[
+                {
+                    "function": {
+                        "name": "calendar.create_event",
+                        "arguments": {
+                            "client_id": "client-123",
+                            "scheduled_at": "2026-06-19T10:00:00-07:00",
+                            "title": "Consultation",
+                        },
+                    }
+                }
+            ],
+        )
+    ]
+
+    with patch("donna.glue.tools.registry.book_calendar", return_value={"formatted_confirmation": "Booked for June 19 at 10:00 AM."}):
+        result = router.handle_turn(
+            call_sid="LOCAL2",
+            user_text="Book me for tomorrow at ten.",
+            agent_mode="local_assistant",
+        )
+
+    assert result.reply == "Booked for June 19 at 10:00 AM."
+    assert router.llm.chat.call_count == 1

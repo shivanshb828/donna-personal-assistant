@@ -9,7 +9,7 @@ python3 -m unittest discover -s tests -v
 cd donna && python3 -m pytest voice/tests/ telephony/tests/ -v
 ```
 
-Expected: **5** unittest cases, **54** pytest cases (voice + telephony mocked — no mic/STT/Twilio required).
+Expected: **5** unittest cases, **58** pytest cases (voice + telephony mocked — no mic/STT/Twilio required).
 
 ## M3 glue layer
 
@@ -64,6 +64,7 @@ Hardware / integration smoke (Dell — from repo root, venv active):
 ```bash
 bash scripts/run_voice.sh
 python -m donna.voice.pipeline --test-mic
+python -m donna.voice.pipeline --text "How is Maria Lopez doing?"
 ```
 
 Hardware / integration smoke (macOS — from `donna/`):
@@ -81,7 +82,7 @@ With M3 context injection (repo root, seed DB present):
 
 ```bash
 bash scripts/run_voice.sh
-# Say "How is Maria doing?" — expect [Loaded case context from local DB]
+# Say "How is Maria doing?" or use --text and expect a context-aware reply from the shared router
 ```
 
 ## Telephony (Twilio bridge)
@@ -113,7 +114,11 @@ On the Dell (or via SSH):
 
 ```bash
 bash scripts/check_services.sh
+bash scripts/verify_ollama_model.sh nemotron-3-nano
 ```
+
+Default model is **`nemotron-3-nano`**. Voice uses direct Ollama — not OpenClaw/NemoClaw.
+`DONNA_OLLAMA_URL` should point at the Ollama base URL, e.g. `http://localhost:11434`.
 
 All checks should print `OK`. Any `FAIL` means that layer of the demo stack is down.
 
@@ -125,7 +130,7 @@ Use before pitching or recording a demo:
 - [ ] `arecord -l` lists a device if demo needs on-box mic (stock GB10: empty)
 - [ ] `context_lookup.py Maria` — returns case hits
 - [ ] `bash scripts/run_voice.sh` — full push-to-talk loop
-- [ ] Mentioning "Maria" triggers `[Loaded case context from local DB]`
+- [ ] `python -m donna.voice.pipeline --text "How is Maria Lopez doing?"` returns a context-aware answer
 
 ## CI / future automation
 

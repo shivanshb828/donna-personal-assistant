@@ -6,6 +6,7 @@
 set -euo pipefail
 
 HOST="${1:-localhost}"
+MODEL="${DONNA_MODEL:-nemotron-3-nano}"
 
 check_http() {
   local name="$1"
@@ -30,25 +31,47 @@ check_tcp() {
   fi
 }
 
-echo "Donna service check — host=$HOST"
+echo "Donna service check — host=$HOST model=$MODEL"
 echo "---"
 
 check_http "STT (faster-whisper)" "http://${HOST}:9000/"
 check_http "TTS (Kokoro)" "http://${HOST}:8880/"
 check_http "Ollama" "http://${HOST}:11434/api/tags"
 check_tcp "Dashboard WS" "$HOST" 3001
+check_tcp "Telephony (optional)" "$HOST" 3002
+
+echo "---"
+if curl -sf "http://${HOST}:11434/api/tags" 2>/dev/null | grep -qi "${MODEL}"; then
+  echo "OK   Ollama model '${MODEL}' in tag list"
+else
+  echo "FAIL Ollama model '${MODEL}' not found — run: ollama list && ollama pull ${MODEL}"
+fi
+
+if [[ "$HOST" == "localhost" || "$HOST" == "127.0.0.1" ]]; then
+  if bash "$(dirname "$0")/verify_ollama_model.sh" "$MODEL" 2>/dev/null; then
+    echo "OK   Ollama model smoke test passed"
+  else
+    echo "WARN Ollama model smoke test failed — run: bash scripts/verify_ollama_model.sh"
+  fi
+fi
 
 echo "---"
 if command -v gbrain >/dev/null 2>&1; then
   echo "OK   gbrain CLI ($(gbrain --version 2>/dev/null | head -1 || echo installed))"
 else
-  echo "FAIL gbrain CLI — install: bun install -g github:garrytan/gbrain"
+  echo "SKIP gbrain CLI — optional"
 fi
 
 if command -v openclaw >/dev/null 2>&1; then
-  echo "OK   openclaw CLI"
+  echo "OK   openclaw CLI (voice bypasses this — direct Ollama)"
 else
-  echo "FAIL openclaw CLI — M2 agent not on PATH"
+  echo "SKIP openclaw CLI — optional; voice uses Ollama direct"
+fi
+
+if command -v nemoclaw >/dev/null 2>&1 || command -v nemo-claw >/dev/null 2>&1; then
+  echo "OK   NemoClaw CLI present"
+else
+  echo "SKIP NemoClaw CLI — not required for voice; OpenClaw model wiring in progress"
 fi
 
 echo "---"
