@@ -22,7 +22,7 @@ from tools.cases import get_status, check_deadline, get_deadlines, TOOL_DEFINITI
 from tools.search import search_cases, summarize_document, TOOL_DEFINITIONS as SEARCH_TOOLS
 
 OLLAMA_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-MODEL = os.environ.get("DONNA_LLM_MODEL", "nemotron:120b")
+MODEL = os.environ.get("DONNA_LLM_MODEL", "qwen2.5:32b")
 
 ALL_TOOLS = INTAKE_TOOLS + CALENDAR_TOOLS + CASES_TOOLS + SEARCH_TOOLS
 

@@ -50,4 +50,4 @@ volumes:
 
 # NOTE: Ollama runs natively (not in Docker) for best GPU perf on GB10
 # Start with: ollama serve &
-# Pull model: ollama pull nemotron:120b
+# Pull model: ollama pull qwen2.5:32b
