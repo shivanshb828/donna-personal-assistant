@@ -16,9 +16,6 @@ import logging
 import sys
 from email.errors import MessageError
 
-from aiosmtpd.controller import Controller
-from aiosmtpd.smtp import Envelope as SmtpEnvelope, Session as SmtpSession, SMTP
-
 from . import config
 from .parser import parse_email
 from .router import route_email
@@ -31,7 +28,7 @@ log = logging.getLogger(__name__)
 
 
 class DonnaHandler:
-    async def handle_DATA(self, server: SMTP, session: SmtpSession, envelope: SmtpEnvelope) -> str:
+    async def handle_DATA(self, server, session, envelope) -> str:
         raw = envelope.content if isinstance(envelope.content, bytes) else envelope.content.encode()
         try:
             parsed = parse_email(raw)
@@ -51,6 +48,7 @@ class DonnaHandler:
 
 
 def _run_smtp():
+    from aiosmtpd.controller import Controller
     handler = DonnaHandler()
     controller = Controller(
         handler,
