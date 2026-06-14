@@ -305,7 +305,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F0F4F8]">
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#F5F3EF' }}>
       <Sidebar
         activeTab={state.activeTab}
         onTabChange={(tab) => dispatch({ type: 'set_tab', tab })}
