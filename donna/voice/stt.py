@@ -20,7 +20,7 @@ def _pcm16_to_wav(pcm_bytes: bytes, sample_rate: int = 16000, channels: int = 1)
 
 def transcribe_audio(audio_bytes: bytes) -> str:
     wav_bytes = _pcm16_to_wav(audio_bytes)
-    with httpx.Client(timeout=15.0) as client:
+    with httpx.Client(timeout=120.0) as client:
         resp = client.post(
             STT_URL,
             files={"file": ("audio.wav", wav_bytes, "audio/wav")},
