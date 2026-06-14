@@ -10,7 +10,7 @@ M3 owns:
 - Case-file create/read/update/search tools.
 - Calendar lookup and scheduling tool adapters.
 - Local document search and retrieval.
-- ChromaDB memory and context injection.
+- GBrain-backed memory adapters (OpenClaw MCP); ChromaDB deferred.
 - Wake-word daemon integration point.
 - Session router that normalizes iMessage and voice inputs into one pipeline.
 - Tool execution dispatcher called by OpenClaw/M2 through M1's IPC envelope.
@@ -59,7 +59,7 @@ donna/
       migrations/
     memory/
       __init__.py
-      chroma_store.py
+      gbrain_client.py
       context_builder.py
     wake/
       __init__.py
@@ -89,7 +89,7 @@ flowchart LR
   IM["iMessage event<br/>from M1 bridge"] --> R["M3 session router"]
   VO["Voice transcript<br/>from M4"] --> R
   WW["Wake-word event<br/>from M4/M3 daemon adapter"] --> R
-  R --> C["Context builder<br/>ChromaDB + case state"]
+  R --> C["Context builder<br/>GBrain MCP + case state"]
   C --> A["M2 OpenClaw agent<br/>via M1 IPC"]
   A --> D["M3 tool dispatcher"]
   D --> T["M3 tools"]
@@ -326,10 +326,12 @@ Deliverable: one command can route a sample iMessage or voice transcript to a mo
 
 Deliverable: Donna can intake a lead and create a local case record.
 
-### Phase 3: ChromaDB Memory
+### Phase 3: GBrain Memory (via OpenClaw MCP)
 
-- Add local ChromaDB client wrapper.
-- Add memory write/search tools.
+- Install GBrain on Dell; scaffold skillpack into OpenClaw workspace.
+- Route `memory.search` / `memory.write` through GBrain MCP (see [gbrain-openclaw-setup.md](gbrain-openclaw-setup.md)).
+- Seed case pages from M3 SQLite fixtures into `~/donna-brain`.
+- Defer standalone ChromaDB — GBrain covers vector + graph retrieval.
 - Add context builder.
 - Add deterministic test mode with fake embeddings if needed.
 

@@ -14,7 +14,7 @@
 | Module | Owns | Status in repo |
 |--------|------|----------------|
 | **M1** | IPC envelope, iMessage bridge | Planned |
-| **M2** | OpenClaw agent, persona | External (`openclaw run donna`) |
+| **M2** | OpenClaw agent + **GBrain** memory | External — see [gbrain-openclaw-setup.md](gbrain-openclaw-setup.md) |
 | **M3** | Glue tools, SQLite context/calendar | Partial — seed DBs + CLIs + context bridge |
 | **M4** | Voice pipeline (STT/VAD/TTS) | Implemented — push-to-talk |
 
@@ -23,19 +23,20 @@
 | Person | Responsibility |
 |--------|----------------|
 | **Shivansh** | Docker: faster-whisper (:9000), Kokoro TTS (:8880), Ollama/Nemotron (:11434) on Dell |
-| **Aayush** | OpenClaw agent config and tool wiring |
+| **Aayush** | OpenClaw agent, **GBrain** brain, M3 tool wiring |
 | **Dhruva** | React dashboard WebSocket (:3001) |
 
 ## Day-of startup order
 
 1. SSH to Dell — see [dell-gbio-access.md](dell-gbio-access.md)
 2. Start inference stack (Shivansh): STT → TTS → Ollama
-3. Pull latest repo branch with voice + M3 integration
-4. Seed test DBs: `python3 scripts/init_m3_test_db.py`
-5. Start dashboard (Dhruva): `npm run dev` on port 3001
-6. Start fake dashboard if React not ready: `python3 donna/fake_dashboard.py`
-7. Run health check: `bash scripts/check_services.sh`
-8. Launch voice: `cd donna && python3 -m voice.pipeline`
+3. Start **GBrain + OpenClaw** (Aayush): `gbrain serve` + `openclaw run donna` — [gbrain-openclaw-setup.md](gbrain-openclaw-setup.md)
+4. Pull latest repo branch with voice + M3 integration
+5. Seed test DBs: `python3 scripts/init_m3_test_db.py`
+6. Start dashboard (Dhruva): `npm run dev` on port 3001
+7. Start fake dashboard if React not ready: `python3 donna/fake_dashboard.py`
+8. Run health check: `bash scripts/check_services.sh`
+9. Launch voice: `cd donna && python3 -m voice.pipeline`
 
 ## Branches (June 14, 2026)
 

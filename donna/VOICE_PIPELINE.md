@@ -130,5 +130,5 @@ Events emitted to `ws://localhost:3001`:
 | faster-whisper-server | 9000 | Shivansh (Docker on Dell GBIO) |
 | Kokoro-FastAPI | 8880 | Shivansh (Docker) |
 | Ollama + Nemotron 120B | 11434 | Shivansh (after `ollama pull nemotron`) |
-| OpenClaw agent | — | Aayush (`openclaw run donna`) |
+| OpenClaw + GBrain | CLI + MCP | Aayush — see [gbrain-openclaw-setup.md](../docs/gbrain-openclaw-setup.md) |
 | React dashboard | 3001 | Dhruva (`npm run dev`) |

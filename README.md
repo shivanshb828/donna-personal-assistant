@@ -16,7 +16,11 @@ python3 -m voice.pipeline
 
 When the M3 seed DB is present, voice queries automatically inject matching case context before the agent call.
 
-## M3 Glue Layer
+## M2 Agent + GBrain (OpenClaw)
+
+- [GBrain + OpenClaw setup](docs/gbrain-openclaw-setup.md) — background memory for `openclaw run donna`
+- [Donna brain schema](docs/donna-brain-schema.md) — case/client markdown layout
+- OpenClaw workspace notes: [openclaw/README.md](openclaw/README.md)
 
 - [M3 implementation plan](docs/m3-glue-layer-plan.md)
 - [M2 testing tools](docs/m2-testing-tools.md)

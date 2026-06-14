@@ -71,7 +71,7 @@ cp data/donna_m3_context.sqlite data/donna_m3_calendar.sqlite /gbio/donna/ 2>/de
 | Kokoro TTS | 8880 | `DONNA_KOKORO_URL` | Shivansh |
 | Ollama + Nemotron | 11434 | `DONNA_OLLAMA_URL` | Shivansh |
 | React dashboard WS | 3001 | `DONNA_DASHBOARD_WS` | Dhruva |
-| OpenClaw agent | CLI | `DONNA_OPENCLAW_BIN` | Aayush |
+| OpenClaw + GBrain | CLI + MCP | `DONNA_OPENCLAW_BIN` | Aayush |
 
 Quick health check from your laptop (while SSH tunnel or on-box):
 

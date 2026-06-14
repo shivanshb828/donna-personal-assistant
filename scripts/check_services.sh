@@ -39,6 +39,19 @@ check_http "Ollama" "http://${HOST}:11434/api/tags"
 check_tcp "Dashboard WS" "$HOST" 3001
 
 echo "---"
+if command -v gbrain >/dev/null 2>&1; then
+  echo "OK   gbrain CLI ($(gbrain --version 2>/dev/null | head -1 || echo installed))"
+else
+  echo "FAIL gbrain CLI — install: bun install -g github:garrytan/gbrain"
+fi
+
+if command -v openclaw >/dev/null 2>&1; then
+  echo "OK   openclaw CLI"
+else
+  echo "FAIL openclaw CLI — M2 agent not on PATH"
+fi
+
+echo "---"
 echo "M3 local files (run from repo root):"
 if [[ -f data/donna_m3_context.sqlite ]]; then
   echo "OK   data/donna_m3_context.sqlite"
