@@ -12,6 +12,7 @@ log = logging.getLogger(__name__)
 _RETRY_ATTEMPTS = 3
 _RETRY_BACKOFF = 2.0
 _IPC_SECRET = os.getenv("DONNA_IPC_SECRET", "")
+_LAWYER_EMAIL = os.getenv("DONNA_LAWYER_EMAIL", "")
 
 
 def _derive_session_id(parsed: dict) -> str:
@@ -55,6 +56,23 @@ async def _post_with_retry(url: str, payload: dict, label: str) -> None:
     log.error("%s — all %d attempts failed, dropping", label, _RETRY_ATTEMPTS)
 
 
+async def _post_with_retry_json(url: str, payload: dict, label: str) -> dict | None:
+    """Like _post_with_retry but returns the JSON response body."""
+    for attempt in range(1, _RETRY_ATTEMPTS + 1):
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(url, json=payload, headers=_headers())
+                resp.raise_for_status()
+                log.info("%s routed | status=%s", label, resp.status_code)
+                return resp.json()
+        except Exception as exc:
+            log.warning("%s attempt %d/%d failed: %s", label, attempt, _RETRY_ATTEMPTS, exc)
+            if attempt < _RETRY_ATTEMPTS:
+                await asyncio.sleep(_RETRY_BACKOFF)
+    log.error("%s — all %d attempts failed, dropping", label, _RETRY_ATTEMPTS)
+    return None
+
+
 async def _route_document_ingest(parsed: dict, attachment: dict, session_id: str) -> None:
     """Send a document_ingest envelope to the VLM pipeline for one attachment."""
     envelope = {
@@ -81,7 +99,7 @@ async def _route_document_ingest(parsed: dict, attachment: dict, session_id: str
 
 
 async def _route_email_text(parsed: dict, session_id: str) -> None:
-    """Send the email body as a user_input envelope to M1's session router."""
+    """Send the email body as a user_input envelope to M1's session router, then email lawyer."""
     envelope = {
         "source": "email",
         "session_id": session_id,
@@ -95,7 +113,42 @@ async def _route_email_text(parsed: dict, session_id: str) -> None:
         parsed["sender"],
         parsed["subject"],
     )
-    await _post_with_retry(config.SESSION_ROUTER_URL, envelope, label)
+    result = await _post_with_retry_json(config.SESSION_ROUTER_URL, envelope, label)
+
+    if not _LAWYER_EMAIL:
+        log.info("DONNA_LAWYER_EMAIL not set — skipping lawyer notification")
+        return
+
+    donna_reply = ""
+    if result:
+        donna_reply = result.get("reply") or result.get("text") or ""
+
+    client_email = parsed.get("sender", "unknown")
+    subject = parsed.get("subject", "")
+    body = parsed.get("body", "")
+
+    intake_body = (
+        f"New intake received via email.\n\n"
+        f"From: {client_email}\n"
+        f"Subject: {subject}\n\n"
+        f"--- Client Message ---\n{body}\n\n"
+        f"--- Donna's Assessment ---\n{donna_reply or '(no reply captured)'}\n"
+    )
+
+    from .sender import send_email as _send
+    try:
+        outcome = await _send(
+            to=_LAWYER_EMAIL,
+            subject=f"[Intake] {subject}",
+            body=intake_body,
+            case_id=session_id,
+            email_type="appointment_confirmation",  # auto-send, no approval gate
+            requires_approval=False,
+            session_id=session_id,
+        )
+        log.info("Lawyer intake email dispatched | to=%s outcome=%s", _LAWYER_EMAIL, outcome)
+    except Exception as exc:
+        log.error("Failed to send lawyer intake email: %s", exc)
 
 
 async def route_email(parsed: dict) -> None:
