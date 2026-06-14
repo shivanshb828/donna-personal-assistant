@@ -43,7 +43,7 @@ def _headers() -> dict:
 async def _post_with_retry(url: str, payload: dict, label: str) -> None:
     for attempt in range(1, _RETRY_ATTEMPTS + 1):
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.post(url, json=payload, headers=_headers())
                 resp.raise_for_status()
                 log.info("%s routed | status=%s", label, resp.status_code)
