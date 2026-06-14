@@ -25,13 +25,14 @@ def test_handle_mulaw_frame_accumulates_partial_chunks():
         speech_result = {"is_speaking": False, "speech_ended": True, "audio": pcm16 * 2}
 
         with patch("donna.telephony.local_provider.twilio_payload_to_pcm16_16k", return_value=pcm16):
-            with patch.object(session.vad, "process", return_value=speech_result):
-                with patch.object(session, "_on_speech", new=AsyncMock(return_value=[])) as on_speech:
-                    await session.handle_mulaw_frame("AAAA")
-                    assert on_speech.await_count == 0
-                    assert len(session.pcm_buffer) > 0
-                    await session.handle_mulaw_frame("AAAA")
-                    assert on_speech.await_count == 1
+                with patch.object(session.vad, "process", return_value=speech_result):
+                    with patch.object(session, "_on_speech", new=AsyncMock(return_value=[])) as on_speech:
+                        await session.handle_mulaw_frame("AAAA")
+                        assert on_speech.await_count == 0
+                        assert len(session.pcm_buffer) > 0
+                        await session.handle_mulaw_frame("AAAA")
+                        await asyncio.sleep(0)
+                        assert on_speech.await_count == 1
 
     asyncio.run(_run())
 

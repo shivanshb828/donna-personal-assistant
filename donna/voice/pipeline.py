@@ -26,7 +26,7 @@ from donna.telephony.db import create_call_session
 from donna.telephony.llm import DonnaLLM
 
 from .stt import transcribe_audio
-from .tts import play_audio, synthesize
+from .tts import SentenceSynthesisQueue, play_audio
 from .vad import create_vad
 from .dashboard_bridge import emit_to_dashboard
 
@@ -88,8 +88,15 @@ async def _emit_turn_timing(runtime: LocalVoiceRuntime, timing: dict) -> None:
     await _emit_local_event(runtime, {"type": "turn_timing", **timing})
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
 def _record_until_silence(pa: pyaudio.PyAudio) -> bytes:
-    vad = create_vad()
+    vad = create_vad(profile="push_to_talk")
     stream = pa.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
     print("[Recording... speak now]")
     collected = b""
@@ -116,6 +123,18 @@ async def _emit_local_event(runtime: LocalVoiceRuntime, event: dict) -> None:
     await emit_to_dashboard(enriched)
 
 
+async def _emit_local_call_started(runtime: LocalVoiceRuntime) -> None:
+    await _emit_local_event(
+        runtime,
+        {
+            "type": "call_started",
+            "callerPhone": "Local Mic",
+            "agentMode": LOCAL_AGENT_MODE,
+            "isReturning": False,
+        },
+    )
+
+
 async def _run_router_turn(runtime: LocalVoiceRuntime, text: str) -> RouterResult:
     return await asyncio.to_thread(
         runtime.router.handle_turn,
@@ -132,6 +151,43 @@ async def _handle_local_turn(runtime: LocalVoiceRuntime, text: str) -> RouterRes
         await _emit_local_event(runtime, {"type": "tool_result", **tool_result})
     await _emit_local_event(runtime, {"type": "donna_speech", "text": result.reply})
     return result
+
+
+async def _handle_local_turn_streaming(runtime: LocalVoiceRuntime, text: str) -> tuple[RouterResult, dict]:
+    await _emit_local_event(runtime, {"type": "user_speech", "text": text})
+    speaking_started = False
+
+    async def _play_sentence(_: str, audio: bytes, stop_event) -> None:
+        await asyncio.to_thread(play_audio, audio, stop_event=stop_event)
+
+    tts_queue = SentenceSynthesisQueue(audio_handler=_play_sentence, started_at=time.perf_counter())
+
+    async def _on_sentence(sentence: str) -> None:
+        nonlocal speaking_started
+        if not speaking_started:
+            speaking_started = True
+            await _emit_local_event(runtime, {"type": "pipeline_status", "status": "speaking"})
+        await _emit_local_event(runtime, {"type": "donna_speech", "text": sentence})
+        await tts_queue.enqueue(sentence)
+
+    llm_started = time.perf_counter()
+    outcome = await runtime.router.stream_turn(
+        call_sid=runtime.session_id,
+        user_text=text,
+        agent_mode=LOCAL_AGENT_MODE,
+        on_sentence=_on_sentence,
+    )
+    for tool_result in outcome.result.tool_results:
+        await _emit_local_event(runtime, {"type": "tool_result", **tool_result})
+    tts_stats = await tts_queue.finish()
+    return outcome.result, {
+        "llm_seconds": _seconds_since(llm_started),
+        "first_token_seconds": outcome.first_token_seconds,
+        "first_sentence_seconds": outcome.first_sentence_seconds,
+        "first_audio_seconds": tts_stats.first_audio_seconds,
+        "tts_total_seconds": round(tts_stats.total_seconds, 3),
+        "interrupted": False,
+    }
 
 
 def _test_mic(pa: pyaudio.PyAudio):
@@ -194,6 +250,7 @@ async def main():
     print("  Press ENTER to speak. Ctrl+C to quit.")
     print("=" * 50)
 
+    await _emit_local_call_started(runtime)
     await _emit_local_event(runtime, {"type": "pipeline_status", "status": "ready"})
 
     try:
@@ -231,26 +288,54 @@ async def main():
             print(f"You: {user_text}")
             print("Donna thinking...")
             try:
-                llm_started = time.perf_counter()
-                result = await _handle_local_turn(runtime, user_text)
-                llm_seconds = _seconds_since(llm_started)
+                if _env_flag("DONNA_ENABLE_STREAMING_LLM", True) or _env_flag("DONNA_ENABLE_STREAMING_TTS", True):
+                    result, streaming_timing = await _handle_local_turn_streaming(runtime, user_text)
+                    llm_seconds = streaming_timing["llm_seconds"]
+                    first_token_seconds = streaming_timing["first_token_seconds"]
+                    first_sentence_seconds = streaming_timing["first_sentence_seconds"]
+                    first_audio_seconds = streaming_timing["first_audio_seconds"]
+                    tts_total_seconds = streaming_timing["tts_total_seconds"]
+                    interrupted = streaming_timing["interrupted"]
+                else:
+                    llm_started = time.perf_counter()
+                    result = await _handle_local_turn(runtime, user_text)
+                    llm_seconds = _seconds_since(llm_started)
+                    first_token_seconds = None
+                    first_sentence_seconds = None
+                    first_audio_seconds = None
+                    tts_total_seconds = 0.0
+                    interrupted = False
                 response = result.reply
             except Exception as e:
                 print(f"[Agent error: {e}]")
                 response = "I'm sorry, I'm having trouble connecting right now."
-                llm_seconds = _seconds_since(llm_started)
+                llm_seconds = 0.0
+                first_token_seconds = None
+                first_sentence_seconds = None
+                first_audio_seconds = None
+                tts_total_seconds = 0.0
+                interrupted = False
 
             print(f"Donna: {response}")
-            await _emit_local_event(runtime, {"type": "pipeline_status", "status": "speaking"})
-
-            try:
-                tts_started = time.perf_counter()
-                audio_out = synthesize(response)
-                play_audio(audio_out)
-                tts_seconds = _seconds_since(tts_started)
-            except Exception as e:
-                print(f"[TTS error: {e}]")
-                tts_seconds = _seconds_since(tts_started)
+            if not (_env_flag("DONNA_ENABLE_STREAMING_LLM", True) or _env_flag("DONNA_ENABLE_STREAMING_TTS", True)):
+                await _emit_local_event(runtime, {"type": "pipeline_status", "status": "speaking"})
+                try:
+                    tts_queue = SentenceSynthesisQueue(
+                        audio_handler=lambda _sentence, audio, stop_event: asyncio.to_thread(
+                            play_audio,
+                            audio,
+                            stop_event=stop_event,
+                        ),
+                        started_at=time.perf_counter(),
+                    )
+                    await tts_queue.enqueue(response)
+                    tts_stats = await tts_queue.finish()
+                    first_audio_seconds = tts_stats.first_audio_seconds
+                    tts_total_seconds = round(tts_stats.total_seconds, 3)
+                except Exception as e:
+                    print(f"[TTS error: {e}]")
+                    first_audio_seconds = None
+                    tts_total_seconds = 0.0
 
             await _emit_turn_timing(
                 runtime,
@@ -258,7 +343,11 @@ async def main():
                     "recording_seconds": recording_seconds,
                     "stt_seconds": stt_seconds,
                     "llm_seconds": llm_seconds,
-                    "tts_seconds": tts_seconds,
+                    "first_token_seconds": first_token_seconds,
+                    "first_sentence_seconds": first_sentence_seconds,
+                    "first_audio_seconds": first_audio_seconds,
+                    "tts_total_seconds": tts_total_seconds,
+                    "interrupted": interrupted,
                     "total_seconds": _seconds_since(total_started),
                 },
             )
@@ -268,6 +357,14 @@ async def main():
     except KeyboardInterrupt:
         print("\nDonna signing off.")
     finally:
+        await _emit_local_event(
+            runtime,
+            {
+                "type": "call_ended",
+                "duration": 0,
+                "outcome": "local_session",
+            },
+        )
         pa.terminate()
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -11,6 +12,11 @@ from fastapi.responses import JSONResponse, Response
 
 from donna.glue.router.session_router import SessionRouter
 from donna.glue.tools.registry import ToolRegistry
+from donna.glue.dashboard_data import (
+    list_calendar_events,
+    list_cases,
+    list_pending_email_drafts,
+)
 from donna.telephony.config import TelephonyConfig
 from donna.telephony.db import (
     complete_call_session,
@@ -320,6 +326,21 @@ def create_app(config: TelephonyConfig | None = None) -> FastAPI:
         if not session:
             return JSONResponse({"error": "not found"}, status_code=404)
         return JSONResponse({"session": session.__dict__})
+
+    @app.get("/api/cases")
+    async def api_list_cases() -> dict:
+        return {"cases": list_cases(cfg.context_db)}
+
+    @app.get("/api/calendar/events")
+    async def api_list_calendar_events(limit: int = 50) -> dict:
+        return {"events": list_calendar_events(cfg.calendar_db, limit=limit)}
+
+    @app.get("/api/emails/drafts")
+    async def api_list_email_drafts() -> dict:
+        import os
+
+        drafts_dir = Path(os.getenv("DONNA_DRAFTS_DIR", "data/donna/drafts"))
+        return {"drafts": list_pending_email_drafts(drafts_dir)}
 
     @app.post("/api/emails/{draft_id}/approve")
     async def api_approve_email(draft_id: str, request: Request) -> JSONResponse:

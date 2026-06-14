@@ -21,14 +21,13 @@ model:
 system_prompt_file: system_prompt.md
 
 # ── Memory (persistent across sessions) ──────────────────────────────────────
-# Backend is GBrain (garrytan/gbrain) — native OpenClaw MCP integration.
-# PGLite mode (Postgres 17 WASM, in-process) — zero server setup, fully local.
-# Embedding provider: Ollama on GB10 (same instance as Nemotron).
-# GBrain replaces ChromaDB: handles vector (pgvector HNSW) + BM25 + knowledge graph.
-# Graph links: client → case → cited_case_law (Donna can traverse relationships).
-# M3 wires the GBrain MCP server; M2 just consumes it via tool calls.
+# Current baseline is OpenClaw's built-in SQLite memory plus M3 SQLite context.
+# The GBrain block below is retained as an optional later-phase MCP backend, not
+# a required part of the current Donna runtime.
+# If/when enabled later, GBrain would provide vector + graph retrieval behind
+# OpenClaw while structured case data remains in M3.
 memory:
-  enabled: true
+  enabled: false
   backend: gbrain
   gbrain_mode: pglite          # local Postgres WASM, no server
   embedding_provider: ollama   # must point to same Ollama instance as Nemotron

@@ -1,4 +1,5 @@
 from pathlib import Path
+import asyncio
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
@@ -7,7 +8,7 @@ import pytest
 from donna.glue.router.session_router import SessionRouter
 from donna.glue.tools.registry import ToolRegistry
 from donna.telephony.db import create_call_session, get_call_session, init_telephony_db, update_call_phase
-from donna.telephony.llm import DonnaLLM, LLMResult
+from donna.telephony.llm import DonnaLLM, LLMResult, LLMStreamChunk
 
 
 @pytest.fixture
@@ -132,3 +133,70 @@ def test_calendar_confirmation_skips_second_llm_turn(router: SessionRouter, tmp_
 
     assert result.reply == "Booked for June 19 at 10:00 AM."
     assert router.llm.chat.call_count == 1
+
+
+def test_stream_turn_emits_sentence_boundaries(router: SessionRouter, tmp_path: Path):
+    telephony_db = tmp_path / "telephony.sqlite"
+    create_call_session(telephony_db, call_sid="LOCAL3", phone=None, agent_mode="local_assistant")
+
+    async def _chat_stream(**kwargs):
+        yield LLMStreamChunk(text_delta="Maria is recovering.", text="Maria is recovering.", first_token_seconds=0.21)
+        yield LLMStreamChunk(
+            text_delta=" Her consultation is booked.",
+            text="Maria is recovering. Her consultation is booked.",
+            done=True,
+            first_token_seconds=0.21,
+        )
+
+    router.llm.chat_stream = _chat_stream
+
+    async def _run() -> None:
+        seen: list[str] = []
+        outcome = await router.stream_turn(
+            call_sid="LOCAL3",
+            user_text="Status update",
+            agent_mode="local_assistant",
+            on_sentence=seen.append,
+        )
+        assert outcome.result.reply == "Maria is recovering. Her consultation is booked."
+        assert seen == ["Maria is recovering.", "Her consultation is booked."]
+        assert outcome.first_token_seconds == 0.21
+        assert outcome.first_sentence_seconds is not None
+
+    asyncio.run(_run())
+
+
+def test_stream_turn_short_circuits_record_consent(router: SessionRouter, tmp_path: Path):
+    telephony_db = tmp_path / "telephony.sqlite"
+    create_call_session(telephony_db, call_sid="LOCAL4", phone=None, agent_mode="local_assistant")
+
+    async def _chat_stream(**kwargs):
+        yield LLMStreamChunk(
+            text="",
+            tool_calls=[
+                {
+                    "function": {
+                        "name": "record_consent",
+                        "arguments": {"consent_type": "recording", "granted": True},
+                    }
+                }
+            ],
+            done=True,
+            first_token_seconds=0.14,
+        )
+
+    router.llm.chat_stream = _chat_stream
+    router.llm.parse_tool_args.side_effect = DonnaLLM.parse_tool_args
+
+    async def _run() -> None:
+        seen: list[str] = []
+        outcome = await router.stream_turn(
+            call_sid="LOCAL4",
+            user_text="Yes, you can record me.",
+            agent_mode="local_assistant",
+            on_sentence=seen.append,
+        )
+        assert outcome.result.reply == "Thanks. I've noted your consent. Please tell me what happened."
+        assert seen == ["Thanks.", "I've noted your consent.", "Please tell me what happened."]
+
+    asyncio.run(_run())

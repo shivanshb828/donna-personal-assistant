@@ -1,11 +1,12 @@
 import io
 import wave
 from unittest.mock import MagicMock, patch
+import asyncio
 
 import numpy as np
 import pytest
 
-from donna.voice.stt import _pcm16_to_wav, transcribe_audio
+from donna.voice.stt import TranscriptionEvent, _pcm16_to_wav, stream_transcription, transcribe_audio
 
 
 def _make_pcm(seconds=0.5, rate=16000) -> bytes:
@@ -72,3 +73,15 @@ class TestTranscribeAudio:
             MockClient.return_value.__enter__.return_value.post.side_effect = httpx.ConnectError("refused")
             with pytest.raises(httpx.ConnectError):
                 transcribe_audio(_make_pcm())
+
+
+def test_stream_transcription_emits_final_event():
+    async def _run() -> None:
+        with patch("donna.voice.stt.transcribe_audio", return_value="hello world"):
+            events = [
+                event
+                async for event in stream_transcription([_make_pcm(0.25), _make_pcm(0.25)])
+            ]
+        assert events == [TranscriptionEvent(text="hello world", is_final=True)]
+
+    asyncio.run(_run())

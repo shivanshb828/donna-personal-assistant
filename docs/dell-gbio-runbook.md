@@ -51,9 +51,10 @@ Do **not** run `pip install -r requirements.txt` system-wide.
 
 | Service | Port | Status | Notes |
 |---------|------|--------|-------|
-| faster-whisper STT | 9000 | Up | Docker `whisper` (host 9000 → container 8000) |
-| Kokoro TTS | 8880 | Up | Docker `kokoro` |
-| Ollama | 11434 | Up | `127.0.0.1` only; model **`nemotron-3-nano`** |
+| STT (legacy active) | 9000 | Up | `fedirz/faster-whisper-server:latest-cuda` |
+| STT (Speaches validation) | 9001 | Planned | Promote after parity/latency checks |
+| Kokoro TTS | 8880 | Up | Live box may still be on CPU `ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.2` until cutover |
+| Ollama | 11434 | Up | `127.0.0.1` only; target voice model **`qwen2.5:14b`** |
 | Dashboard WS | 3001 | Down | Use `bash scripts/run_fake_dashboard.sh` |
 | OpenClaw CLI | — | Installed | Optional — voice uses Ollama direct |
 | GBrain CLI | — | Not installed | Optional |
@@ -62,7 +63,7 @@ Health check:
 
 ```bash
 cd ~/dell-hack && bash scripts/check_services.sh
-bash scripts/verify_ollama_model.sh nemotron-3-nano
+bash scripts/verify_ollama_model.sh qwen2.5:14b
 ```
 
 Discovery dump:
@@ -114,12 +115,16 @@ jack server is not running or cannot be started
 ## Voice pipeline (current architecture)
 
 ```
-Enter → Mic → Energy VAD → STT :9000 → SQLite context → Ollama :11434 → TTS :8880 → Speaker
+Enter → Mic → Energy VAD → STT :9000 → streamed Ollama :11434 → sentence-queued TTS :8880 → Speaker
 ```
 
 - **No OpenClaw hop** — direct Ollama HTTP
 - **No torch on Dell** — `[VAD] Silero failed ... using energy VAD` is expected
-- Default model: **`nemotron-3-nano`** (set via `DONNA_MODEL`; already pulled on GB10)
+- Default model target: **`qwen2.5:14b`** (set via `DONNA_MODEL`)
+- Live machine drift to correct:
+  - Kokoro may still be CPU `ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.2`
+  - STT may still be `fedirz/faster-whisper-server:latest-cuda`
+  - Ollama may still have both `qwen2.5:14b` and `nemotron-3-nano` loaded
 - Voice **does not use OpenClaw/NemoClaw** — direct Ollama HTTP for latency
 - OpenClaw + Nemotron Nano wiring is a **separate M2 task** (known in progress / blocked)
 - Context DB: `data/donna_m3_context.sqlite` (paths relative to repo root)

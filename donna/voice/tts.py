@@ -1,7 +1,15 @@
+from __future__ import annotations
+
+import asyncio
 import io
+import inspect
 import os
 import subprocess
+import threading
+import time
 import wave
+from dataclasses import dataclass
+from typing import Awaitable, Callable
 
 import httpx
 
@@ -51,7 +59,12 @@ def synthesize(text: str) -> bytes:
     raise RuntimeError("All TTS backends failed")
 
 
-def play_audio(audio_bytes: bytes):
+def play_audio(
+    audio_bytes: bytes,
+    *,
+    stop_event: threading.Event | None = None,
+    on_start: Callable[[], None] | None = None,
+) -> None:
     import pyaudio
     buf = io.BytesIO(audio_bytes)
     with wave.open(buf, "rb") as wf:
@@ -64,14 +77,87 @@ def play_audio(audio_bytes: bytes):
         )
         try:
             chunk = 1024
+            if on_start:
+                on_start()
             data = wf.readframes(chunk)
             while data:
+                if stop_event and stop_event.is_set():
+                    break
                 stream.write(data)
                 data = wf.readframes(chunk)
         finally:
             stream.stop_stream()
             stream.close()
             pa.terminate()
+
+
+SentenceAudioHandler = Callable[[str, bytes, threading.Event], Awaitable[None] | None]
+
+
+@dataclass
+class SentenceSynthesisStats:
+    first_audio_seconds: float | None = None
+    total_seconds: float = 0.0
+    sentence_count: int = 0
+
+
+class SentenceSynthesisQueue:
+    def __init__(
+        self,
+        *,
+        audio_handler: SentenceAudioHandler,
+        started_at: float | None = None,
+    ) -> None:
+        self.audio_handler = audio_handler
+        self.started_at = started_at or time.perf_counter()
+        self.stats = SentenceSynthesisStats()
+        self._queue: asyncio.Queue[str | None] = asyncio.Queue()
+        self._worker_task: asyncio.Task[None] | None = None
+        self._stop_event = threading.Event()
+
+    async def enqueue(self, text: str) -> None:
+        sentence = text.strip()
+        if not sentence:
+            return
+        if self._worker_task is None:
+            self._worker_task = asyncio.create_task(self._worker())
+        await self._queue.put(sentence)
+
+    def cancel(self) -> None:
+        self._stop_event.set()
+        while True:
+            try:
+                self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+        try:
+            self._queue.put_nowait(None)
+        except asyncio.QueueFull:
+            pass
+
+    async def finish(self) -> SentenceSynthesisStats:
+        if self._worker_task is None:
+            return self.stats
+        await self._queue.put(None)
+        await self._worker_task
+        return self.stats
+
+    async def _worker(self) -> None:
+        while True:
+            sentence = await self._queue.get()
+            if sentence is None:
+                return
+            if self._stop_event.is_set():
+                continue
+            started = time.perf_counter()
+            audio = await asyncio.to_thread(synthesize, sentence)
+            self.stats.total_seconds += time.perf_counter() - started
+            self.stats.sentence_count += 1
+            if self.stats.first_audio_seconds is None:
+                self.stats.first_audio_seconds = round(time.perf_counter() - self.started_at, 3)
+            maybe_awaitable = self.audio_handler(sentence, audio, self._stop_event)
+            if inspect.isawaitable(maybe_awaitable):
+                await maybe_awaitable
 
 
 if __name__ == "__main__":

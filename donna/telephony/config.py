@@ -35,7 +35,7 @@ class TelephonyConfig:
             calendar_db=Path(os.getenv("DONNA_CALENDAR_DB", "data/donna_m3_calendar.sqlite")),
             dashboard_ws=os.getenv("DONNA_DASHBOARD_WS", "ws://localhost:3001"),
             ollama_url=os.getenv("DONNA_OLLAMA_URL", "http://localhost:11434"),
-            ollama_model=os.getenv("DONNA_MODEL", "qwen2.5:32b"),
+            ollama_model=os.getenv("DONNA_MODEL", "qwen2.5:14b"),
             firm_name=os.getenv("DONNA_FIRM_NAME", "Donna Legal"),
             echo_mode=os.getenv("DONNA_TELEPHONY_ECHO", "").lower() in {"1", "true", "yes"},
             validate_twilio_signature=os.getenv("DONNA_VALIDATE_TWILIO", "true").lower()

@@ -20,7 +20,7 @@ else
 fi
 
 # Step 2: Check/pull model
-MODEL=${DONNA_LLM_MODEL:-"nemotron:120b"}
+MODEL=${DONNA_LLM_MODEL:-"qwen2.5:14b"}
 echo "[2/5] Checking model: $MODEL"
 if ! ollama list | grep -q "$MODEL"; then
     echo "  Pulling $MODEL (this may take a while for 120B)..."
@@ -36,11 +36,11 @@ echo "  Waiting for services to be ready..."
 sleep 5
 
 # Health checks
-echo "  Checking Whisper STT..."
+echo "  Checking STT..."
 until curl -sf http://localhost:9000/health > /dev/null 2>&1; do
     sleep 2
 done
-echo "  ✓ Whisper STT ready"
+echo "  ✓ STT ready"
 
 echo "  Checking ChromaDB..."
 until curl -sf http://localhost:8001/api/v1/heartbeat > /dev/null 2>&1; do

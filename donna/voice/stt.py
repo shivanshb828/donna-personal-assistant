@@ -1,6 +1,11 @@
+from __future__ import annotations
+
+import asyncio
+from collections.abc import AsyncIterable, Iterable
 import io
 import os
 import wave
+from dataclasses import dataclass
 
 import httpx
 
@@ -28,6 +33,28 @@ def transcribe_audio(audio_bytes: bytes) -> str:
         )
     resp.raise_for_status()
     return resp.json().get("text", "").strip()
+
+
+@dataclass
+class TranscriptionEvent:
+    text: str
+    is_final: bool = False
+
+
+async def stream_transcription(
+    audio_chunks: AsyncIterable[bytes] | Iterable[bytes],
+) -> AsyncIterable[TranscriptionEvent]:
+    collected = bytearray()
+    if hasattr(audio_chunks, "__aiter__"):
+        async for chunk in audio_chunks:
+            collected.extend(chunk)
+    else:
+        for chunk in audio_chunks:
+            collected.extend(chunk)
+
+    text = await asyncio.to_thread(transcribe_audio, bytes(collected))
+    if text:
+        yield TranscriptionEvent(text=text, is_final=True)
 
 
 if __name__ == "__main__":

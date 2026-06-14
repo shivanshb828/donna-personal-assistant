@@ -73,5 +73,9 @@ export const EVENT_TYPE_COLORS = {
   other: 'bg-slate-100 text-slate-600',
 }
 
-export const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:3001'
+export const WS_URL =
+  import.meta.env.VITE_WS_URL ??
+  (typeof window !== 'undefined'
+    ? `ws://${window.location.hostname}:3001`
+    : 'ws://localhost:3001')
 export const API_URL = import.meta.env.VITE_API_URL ?? ''

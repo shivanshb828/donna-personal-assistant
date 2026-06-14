@@ -9,7 +9,7 @@ locally on Dell GB10 — no audio or case data leaves the machine.
 
 See `README.md` for product overview and demo script.
 
-Push-to-talk and telephony now share the same local Nano voice brain:
+Push-to-talk and telephony now share the same local voice brain:
 `SessionRouter + ToolRegistry + SQLite state`. The only channel-specific pieces are
 audio transport and user I/O.
 
@@ -20,9 +20,9 @@ audio transport and user I/O.
     ↓
 Microphone (PyAudio, 16kHz mono PCM16)
     ↓
-VAD — Silero-VAD (energy fallback) — auto-stops on 800ms silence
+VAD — Silero-VAD (energy fallback) — default 10-12 silence frames, env-tunable
     ↓
-STT — faster-whisper-server (localhost:9000, OpenAI-compatible)
+STT — active runtime on `:9000`, Speaches validation sidecar on `:9001`
     ↓
 SessionRouter (`local_assistant` mode)
     ↓
@@ -30,9 +30,9 @@ ToolRegistry + SQLite state (`data/donna_telephony.sqlite`)
     ↓
 M3 context lookup / case context (`data/donna_m3_context.sqlite`)
     ↓
-Ollama (nemotron-3-nano on Dell GB10)
+Ollama (`qwen2.5:14b` on Dell GB10, request keep-alive enabled)
     ↓
-TTS — Kokoro-FastAPI (localhost:8880) → Piper fallback
+TTS — Kokoro-FastAPI GPU `v0.5.0` (localhost:8880) → Piper fallback
     ↓
 Speaker (PyAudio playback)
     ↓
@@ -44,8 +44,8 @@ Dashboard WebSocket (localhost:3001) — status + transcript events
 | File | Role |
 |------|------|
 | `voice/vad.py` | Voice activity detection — Silero-VAD + energy fallback |
-| `voice/stt.py` | Speech-to-text via faster-whisper-server |
-| `voice/tts.py` | Text-to-speech — Kokoro primary, Piper fallback |
+| `voice/stt.py` | Speech-to-text batch path + streaming STT entrypoint |
+| `voice/tts.py` | Text-to-speech — sentence queue over Kokoro primary, Piper fallback |
 | `voice/wake_word.py` | Push-to-talk (keyboard) now; openwakeword stub for later |
 | `voice/pipeline.py` | Push-to-talk adapter over the shared router/tool brain |
 | `voice/dashboard_bridge.py` | WebSocket event emitter |
@@ -85,8 +85,8 @@ Optional services:
 
 ```bash
 # Kokoro TTS (usually already running in Docker on Dell)
-docker pull ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.2
-docker run -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.2
+docker pull ghcr.io/remsky/kokoro-fastapi-gpu:v0.5.0
+docker run --gpus all -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-gpu:v0.5.0
 
 # Piper binary fallback
 pip install piper-tts
@@ -115,7 +115,7 @@ cd ~/dell-hack && bash scripts/run_voice.sh
 # or: python -m donna.voice.pipeline  (from repo root, venv active)
 ```
 
-Press **ENTER** to speak. Donna auto-stops when you go silent (~800ms).
+Press **ENTER** to speak. Donna auto-stops when you go silent (~320-384ms by default).
 
 ## Audio on Dell GB10 (confirmed)
 
@@ -140,7 +140,12 @@ See [docs/dell-gbio-runbook.md](../docs/dell-gbio-runbook.md) for port-forward +
 | `DONNA_KOKORO_VOICE` | `af_heart` | Kokoro voice |
 | `DONNA_PIPER_MODEL` | `en_US-amy-medium` | Piper voice model |
 | `DONNA_OLLAMA_URL` | `http://localhost:11434` | Ollama base URL |
-| `DONNA_MODEL` | `nemotron-3-nano` on Dell GB10 | Ollama model name |
+| `DONNA_MODEL` | `qwen2.5:14b` on Dell GB10 | Ollama model name |
+| `DONNA_OLLAMA_KEEP_ALIVE` | `-1` | Request-level Ollama residency override |
+| `DONNA_VAD_SILENCE_FRAMES` | `12` (`10` for push-to-talk) | End-of-turn silence threshold |
+| `DONNA_ENABLE_STREAMING_LLM` | `true` | Stream Ollama chat responses |
+| `DONNA_ENABLE_STREAMING_TTS` | `true` | Synthesize/play sentence chunks as they arrive |
+| `DONNA_ENABLE_STREAMING_STT` | `false` | Enable streaming STT experiments |
 | `DONNA_CONTEXT_DB` | `data/donna_m3_context.sqlite` | Local SQLite DB for case context lookup |
 | `DONNA_TELEPHONY_DB` | `data/donna_telephony.sqlite` | Shared session/intake state for mic + phone |
 | `DONNA_DASHBOARD_WS` | `ws://localhost:3001` | Dashboard WebSocket |
@@ -182,8 +187,9 @@ Events emitted to `ws://localhost:3001`:
 ```json
 {"type": "pipeline_status", "status": "ready|listening|processing|speaking", "callSid": "local-...", "sessionId": "local-...", "ts": 1234}
 {"type": "user_speech", "text": "I was in an accident last week", "callSid": "local-...", "sessionId": "local-...", "ts": 1234}
-{"type": "donna_speech", "text": "I can help with that. What date did the accident occur?", "callSid": "local-...", "sessionId": "local-...", "ts": 1234}
+{"type": "donna_speech", "text": "I can help with that.", "callSid": "local-...", "sessionId": "local-...", "ts": 1234}
 {"type": "tool_result", "callSid": "local-...", "sessionId": "local-...", "tool": "intake.start", "ok": true}
+{"type": "turn_timing", "callSid": "local-...", "first_token_seconds": 0.42, "first_sentence_seconds": 0.88, "first_audio_seconds": 1.21, "tts_total_seconds": 1.94, "interrupted": false}
 {"type": "call_started", "callSid": "CA...", "callerPhone": "+1...", "agentMode": "inbound_intake"}
 {"type": "tool_result", "callSid": "CA...", "tool": "intake.start", "ok": true}
 {"type": "call_ended", "callSid": "CA...", "duration": 120, "outcome": "BOOKING"}
@@ -195,8 +201,9 @@ Telephony events are emitted by `donna/telephony/local_provider.py` via the same
 
 | Service | Port | Who starts it |
 |---------|------|---------------|
-| faster-whisper-server | 9000 | Shivansh (Docker on Dell GBIO) |
-| Kokoro-FastAPI | 8880 | Shivansh (Docker) |
-| Ollama + Nemotron 3 Nano | 11434 | `ollama pull nemotron-3-nano` |
+| Active STT runtime | 9000 | Docker on Dell GB10 |
+| Speaches validation sidecar | 9001 | Docker on Dell GB10 |
+| Kokoro-FastAPI | 8880 | Docker on Dell GB10 |
+| Ollama + qwen2.5:14b | 11434 | `ollama pull qwen2.5:14b` |
 | React dashboard | 3001 | Dhruva (`npm run dev`) |
 | **Donna telephony (Twilio)** | **3002** | **`bash scripts/run_telephony.sh`** |

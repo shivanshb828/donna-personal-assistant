@@ -6,7 +6,7 @@
 set -euo pipefail
 
 HOST="${1:-localhost}"
-MODEL="${DONNA_MODEL:-nemotron-3-nano}"
+MODEL="${DONNA_MODEL:-qwen2.5:14b}"
 
 check_http() {
   local name="$1"
@@ -34,7 +34,8 @@ check_tcp() {
 echo "Donna service check — host=$HOST model=$MODEL"
 echo "---"
 
-check_http "STT (faster-whisper)" "http://${HOST}:9000/"
+check_http "STT active (port 9000)" "http://${HOST}:9000/health"
+check_http "STT Speaches sidecar" "http://${HOST}:9001/health"
 check_http "TTS (Kokoro)" "http://${HOST}:8880/"
 check_http "Ollama" "http://${HOST}:11434/api/tags"
 check_tcp "Dashboard WS" "$HOST" 3001

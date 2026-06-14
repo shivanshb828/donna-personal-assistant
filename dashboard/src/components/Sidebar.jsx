@@ -104,6 +104,7 @@ export default function Sidebar({
   emailDraftsCount,
   newLeadsCount,
   pipelineStatus,
+  backendConnected = false,
 }) {
   return (
     <aside className="w-56 flex-shrink-0 bg-navy-900 flex flex-col h-full border-r border-white/5">
@@ -168,9 +169,8 @@ export default function Sidebar({
       <div className="px-4 py-4 border-t border-white/5 space-y-2">
         <p className="text-[10px] uppercase tracking-widest text-slate-600 mb-2 font-semibold">Services</p>
         <StatusDot connected={wsConnected} label="Dashboard WS" />
-        <StatusDot connected label="Ollama LLM" />
-        <StatusDot connected label="Whisper STT" />
-        <StatusDot connected label="Kokoro TTS" />
+        <StatusDot connected={backendConnected} label="Telephony API" />
+        <StatusDot connected={backendConnected} label="IPC / Email" />
       </div>
 
       {/* Footer */}

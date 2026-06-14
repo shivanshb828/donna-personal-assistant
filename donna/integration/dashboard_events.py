@@ -12,6 +12,7 @@ disconnect immediately after sending they are gone before any echo could reach t
 import asyncio
 import json
 import logging
+import os
 from typing import Set
 
 import websockets
@@ -47,10 +48,12 @@ async def handler(websocket: WebSocketServerProtocol) -> None:
         connected.discard(websocket)
 
 
-async def start_server(host: str = "localhost", port: int = 3001) -> None:
+async def start_server(host: str | None = None, port: int | None = None) -> None:
+    bind_host = host or os.getenv("DONNA_DASHBOARD_BIND", "localhost")
+    bind_port = port or int(os.getenv("DONNA_DASHBOARD_PORT", "3001"))
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s — %(message)s")
-    log.info("Dashboard WS relay on ws://%s:%d — waiting for connections", host, port)
-    async with websockets.serve(handler, host, port):
+    log.info("Dashboard WS relay on ws://%s:%d — waiting for connections", bind_host, bind_port)
+    async with websockets.serve(handler, bind_host, bind_port):
         await asyncio.Future()
 
 

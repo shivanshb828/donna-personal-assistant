@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Verify Nemotron 3 Nano is pulled, responds, and supports tool calling.
+# Verify the Donna Ollama model is pulled, responds, and supports tool calling.
 # Usage: bash scripts/verify_ollama_model.sh [model_name]
 # Run on Dell (or via SSH): cd ~/dell-hack && bash scripts/verify_ollama_model.sh
 
 set -euo pipefail
 
-MODEL="${1:-${DONNA_MODEL:-nemotron-3-nano}}"
+MODEL="${1:-${DONNA_MODEL:-qwen2.5:14b}}"
 OLLAMA_HOST="${OLLAMA_HOST:-http://127.0.0.1:11434}"
 
 echo "Donna Ollama model verification"

@@ -83,6 +83,25 @@ function reducer(state, action) {
     }
 
     case 'user_speech':
+      if (!state.activeCall && (action.callSid || action.sessionId)) {
+        return {
+          ...state,
+          activeCall: {
+            callSid: action.callSid || action.sessionId,
+            callerPhone: action.callerPhone || 'Local Mic',
+            agentMode: action.agentMode || 'local_assistant',
+            isReturning: false,
+            startedAt: ts,
+          },
+          currentPhase: state.currentPhase || 'DISCLOSURE',
+          pipelineStatus: state.pipelineStatus === 'idle' ? 'ready' : state.pipelineStatus,
+          activeTab: 'live',
+          transcript: [
+            ...state.transcript,
+            { id: `u-${ts}-${Math.random()}`, role: 'user', text: action.text, ts },
+          ],
+        }
+      }
       return {
         ...state,
         transcript: [
@@ -201,23 +220,63 @@ export default function App() {
     })
   }, [state.demoRunning])
 
-  // Leads from API (falls back to demo data)
-  const [leads, setLeads] = useState(DEMO_LEADS)
-  const fetchLeads = useCallback(async () => {
+  // Leads / cases / calendar / email drafts from backend API
+  const [leads, setLeads] = useState([])
+  const [cases, setCases] = useState(DEMO_CASES)
+  const [calendarEvents, setCalendarEvents] = useState(DEMO_EVENTS)
+  const [apiEmailDrafts, setApiEmailDrafts] = useState([])
+  const [backendConnected, setBackendConnected] = useState(false)
+
+  const refreshBackend = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/leads`)
-      if (res.ok) {
-        const data = await res.json()
-        if (data.leads?.length) setLeads(data.leads)
+      const health = await fetch(`${API_URL}/health`)
+      if (!health.ok) {
+        setBackendConnected(false)
+        return
+      }
+      setBackendConnected(true)
+
+      const [leadsRes, casesRes, eventsRes, draftsRes] = await Promise.all([
+        fetch(`${API_URL}/api/leads`),
+        fetch(`${API_URL}/api/cases`),
+        fetch(`${API_URL}/api/calendar/events`),
+        fetch(`${API_URL}/api/emails/drafts`),
+      ])
+
+      if (leadsRes.ok) {
+        const data = await leadsRes.json()
+        setLeads(data.leads ?? [])
+      }
+      if (casesRes.ok) {
+        const data = await casesRes.json()
+        if (data.cases?.length) setCases(data.cases)
+      }
+      if (eventsRes.ok) {
+        const data = await eventsRes.json()
+        if (data.events?.length) setCalendarEvents(data.events)
+      }
+      if (draftsRes.ok) {
+        const data = await draftsRes.json()
+        setApiEmailDrafts(data.drafts ?? [])
       }
     } catch {
-      // keep demo data
+      setBackendConnected(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchLeads()
-  }, [fetchLeads])
+    refreshBackend()
+    const interval = setInterval(refreshBackend, 15000)
+    return () => clearInterval(interval)
+  }, [refreshBackend])
+
+  const emailDrafts = (() => {
+    const merged = new Map()
+    for (const draft of [...apiEmailDrafts, ...state.emailDrafts]) {
+      if (draft?.draft_id) merged.set(draft.draft_id, draft)
+    }
+    return [...merged.values()]
+  })()
 
   const addLead = useCallback(async (lead) => {
     try {
@@ -233,7 +292,8 @@ export default function App() {
     } catch {
       setLeads((prev) => [{ id: `local-${Date.now()}`, ...lead, status: 'new', created_at: new Date().toISOString() }, ...prev])
     }
-  }, [])
+    refreshBackend()
+  }, [refreshBackend])
 
   const callLead = useCallback(async (lead) => {
     try {
@@ -245,10 +305,11 @@ export default function App() {
       setLeads((prev) =>
         prev.map((l) => (l.id === lead.id ? { ...l, status: 'contacted' } : l))
       )
+      refreshBackend()
     } catch {
       // show graceful error
     }
-  }, [])
+  }, [refreshBackend])
 
   const approveEmail = useCallback(async (draft) => {
     try {
@@ -259,7 +320,8 @@ export default function App() {
       })
     } catch {}
     dispatch({ type: 'email_sent', draft_id: draft.draft_id })
-  }, [])
+    refreshBackend()
+  }, [refreshBackend])
 
   const rejectEmail = useCallback(async (draft, reason) => {
     try {
@@ -270,7 +332,8 @@ export default function App() {
       })
     } catch {}
     dispatch({ type: 'email_rejected', draft_id: draft.draft_id })
-  }, [])
+    refreshBackend()
+  }, [refreshBackend])
 
   const views = {
     live: (
@@ -286,11 +349,11 @@ export default function App() {
         onRunDemo={runDemo}
       />
     ),
-    cases: <CasesView cases={DEMO_CASES} />,
-    calendar: <CalendarView events={DEMO_EVENTS} />,
+    cases: <CasesView cases={cases} />,
+    calendar: <CalendarView events={calendarEvents} />,
     emails: (
       <EmailsView
-        drafts={state.emailDrafts}
+        drafts={emailDrafts}
         onApprove={approveEmail}
         onReject={rejectEmail}
       />
@@ -311,9 +374,10 @@ export default function App() {
         onTabChange={(tab) => dispatch({ type: 'set_tab', tab })}
         wsConnected={state.wsConnected}
         activeCall={state.activeCall}
-        emailDraftsCount={state.emailDrafts.length}
+        emailDraftsCount={emailDrafts.length}
         newLeadsCount={leads.filter((l) => l.status === 'new').length}
         pipelineStatus={state.pipelineStatus}
+        backendConnected={backendConnected}
       />
       <main className="flex-1 overflow-hidden flex flex-col">
         {views[state.activeTab]}

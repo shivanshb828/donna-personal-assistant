@@ -1,7 +1,7 @@
 version: "3.8"
 
 services:
-  # Speech-to-Text: faster-whisper-server (OpenAI-compatible API)
+  # Active STT runtime until Speaches parity is validated.
   whisper-stt:
     image: fedirz/faster-whisper-server:latest-cuda
     ports:
@@ -19,9 +19,36 @@ services:
               capabilities: [gpu]
     restart: unless-stopped
 
+  # Validation sidecar for the maintained STT runtime.
+  speaches-stt:
+    image: ghcr.io/speaches-ai/speaches:0.9.0-rc.3-cuda
+    ports:
+      - "9001:8000"
+    environment:
+      - ENABLE_UI=false
+      - LOG_LEVEL=info
+      - WHISPER__MODEL=Systran/faster-distil-whisper-large-v3
+      - PRELOAD_MODELS=["Systran/faster-distil-whisper-large-v3"]
+    volumes:
+      - speaches_cache:/home/ubuntu/.cache/huggingface/hub
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
   # Text-to-Speech: Kokoro-FastAPI (OpenAI-compatible API)
   kokoro-tts:
-    image: ghcr.io/remsky/kokoro-fastapi-gpu:latest
+    image: ghcr.io/remsky/kokoro-fastapi-gpu:v0.5.0
     ports:
       - "8880:8880"
     deploy:
@@ -46,8 +73,9 @@ services:
 
 volumes:
   whisper_cache:
+  speaches_cache:
   chroma_data:
 
 # NOTE: Ollama runs natively (not in Docker) for best GPU perf on GB10
-# Start with: ollama serve &
-# Pull model: ollama pull qwen2.5:72b
+# Start with: systemctl restart ollama
+# Pull model: ollama pull qwen2.5:14b

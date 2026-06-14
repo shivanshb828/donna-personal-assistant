@@ -1,10 +1,11 @@
 import io
+import asyncio
 import wave
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from donna.voice.tts import synthesize, _synthesize_kokoro, _synthesize_piper
+from donna.voice.tts import SentenceSynthesisQueue, synthesize, _synthesize_kokoro, _synthesize_piper
 
 
 def _make_wav(duration_s=0.1, rate=22050) -> bytes:
@@ -88,3 +89,24 @@ class TestSynthesize:
              patch("donna.voice.tts._synthesize_piper", side_effect=Exception("p")):
             with pytest.raises(RuntimeError, match="All TTS backends failed"):
                 synthesize("Hello")
+
+
+def test_sentence_queue_tracks_first_audio_and_total_seconds():
+    async def _run() -> None:
+        spoken: list[str] = []
+
+        async def _audio_handler(sentence: str, audio: bytes, stop_event) -> None:
+            spoken.append(sentence)
+
+        queue = SentenceSynthesisQueue(audio_handler=_audio_handler)
+        with patch("donna.voice.tts.synthesize", side_effect=[b"one", b"two"]):
+            await queue.enqueue("Hello there.")
+            await queue.enqueue("Second sentence.")
+            stats = await queue.finish()
+
+        assert spoken == ["Hello there.", "Second sentence."]
+        assert stats.sentence_count == 2
+        assert stats.first_audio_seconds is not None
+        assert stats.total_seconds >= 0
+
+    asyncio.run(_run())

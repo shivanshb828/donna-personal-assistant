@@ -5,7 +5,7 @@
 
 ## Overview
 
-The document intelligence pipeline is a background service that receives files (medical records, police reports, adjuster letters, etc.), runs LLM extraction and analysis, and writes structured context back to GBrain. Donna then synthesizes that context and notifies the lawyer.
+The document intelligence pipeline is a background service that receives files (medical records, police reports, adjuster letters, etc.), runs LLM extraction and analysis, and writes structured context back to the local Donna data layer. Today that means SQLite plus optional Chroma indexing; GBrain is a possible later-phase add-on. Donna then synthesizes that context and notifies the lawyer.
 
 ---
 
@@ -17,7 +17,7 @@ The VLM (document parser) extracts raw facts from a file. Donna interprets them 
 |---|---|
 | "Date: 3/3, body part: neck, provider: Dr. Smith" | "That neck injury was never mentioned at intake — flagging it." |
 | "Police report says airbags deployed" | "Client said minor impact. That's a contradiction — risk score drops." |
-| Raw extraction, no memory | Cross-references GBrain, knows full case history |
+| Raw extraction, no memory | Cross-references local case memory, knows full case history |
 | No tools | Calls `update_case_file`, notifies lawyer, updates risk score |
 | Stateless | Persistent session across turns |
 
@@ -37,9 +37,9 @@ pipeline     → receives envelope
              → LLM extracts structured facts
              → runs consistency check across all case documents
              → runs litigation risk score
-             → writes everything to GBrain
+             → writes summaries and case context to the local data layer
 
-GBrain       → updated (facts, flags, risk score, summary)
+SQLite / Chroma → updated (facts, flags, risk score, summary)
 
 pipeline     → sends pipeline_complete IPC envelope
 

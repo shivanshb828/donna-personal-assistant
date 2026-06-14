@@ -6,6 +6,7 @@ echo "=================="
 
 PASS=0
 FAIL=0
+MODEL="${DONNA_MODEL:-qwen2.5:14b}"
 
 check() {
     if eval "$2" > /dev/null 2>&1; then
@@ -20,8 +21,10 @@ check() {
 echo ""
 echo "Services:"
 check "Ollama running" "pgrep -x ollama"
-check "Ollama model loaded" "ollama ps | grep -q nemotron"
-check "Whisper STT (port 9000)" "curl -sf http://localhost:9000/health"
+MODEL="${DONNA_MODEL:-qwen2.5:14b}"
+check "Ollama model loaded" "ollama ps | grep -qi '${MODEL}' || curl -sf http://localhost:11434/api/tags | grep -qi '${MODEL}'"
+check "STT active (port 9000)" "curl -sf http://localhost:9000/health"
+check "STT Speaches sidecar (port 9001)" "curl -sf http://localhost:9001/health"
 check "Kokoro TTS (port 8880)" "curl -sf http://localhost:8880/health"
 check "ChromaDB (port 8001)" "curl -sf http://localhost:8001/api/v2/heartbeat"
 

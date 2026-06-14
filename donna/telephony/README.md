@@ -1,6 +1,6 @@
 # Donna Voice Telephony
 
-Twilio Media Streams bridge using local Whisper STT, Nemotron LLM, and Kokoro TTS.
+Twilio Media Streams bridge using local STT, streamed Qwen-on-Ollama turns, and Kokoro TTS.
 
 ## Architecture
 
@@ -9,9 +9,9 @@ Caller → Twilio PSTN
     → POST /voice (TwiML <Stream>)
     → WS /media-stream
         → μ-law 8kHz ↔ PCM16 16kHz
-        → VAD → Whisper STT
-        → Session router → Nemotron (+ tools)
-        → Kokoro TTS → chunked μ-law back to Twilio
+        → VAD → STT (:9000 active, :9001 Speaches sidecar)
+        → Session router → Ollama qwen2.5:14b (+ tools)
+        → sentence-queued Kokoro TTS → chunked μ-law back to Twilio
     → Dashboard WebSocket events (ws://localhost:3001)
     → SQLite telephony DB (call_sessions, intake, leads, messages)
 ```

@@ -13,10 +13,10 @@ Envelope: { source, session_id, text, type }
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -26,12 +26,14 @@ from donna.glue.router.session_router import SessionRouter
 from donna.glue.tools.registry import ToolRegistry
 from donna.telephony.config import TelephonyConfig
 from donna.telephony.db import create_call_session, get_call_session
+from donna.telephony.events import broadcast_event
 from donna.telephony.llm import DonnaLLM
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 log = logging.getLogger(__name__)
 
 VLM_INGEST_URL = os.getenv("DONNA_PIPELINE_INGEST_URL", "http://localhost:8765/ingest")
+EMAIL_DASHBOARD_TYPES = frozenset({"email_draft_pending", "email_sent", "email_rejected"})
 
 # One SessionRouter is enough — it manages per-session_id history internally
 _cfg: TelephonyConfig | None = None
@@ -108,6 +110,17 @@ async def handle_ipc(envelope: IPCEnvelope):
     if envelope.type == "document_ingest":
         asyncio.ensure_future(_forward_to_vlm(envelope))
         return {"status": "accepted", "routed_to": "vlm"}
+
+    # Outbound email lifecycle → dashboard WebSocket relay
+    if envelope.type in EMAIL_DASHBOARD_TYPES:
+        cfg = TelephonyConfig.from_env()
+        try:
+            payload = json.loads(envelope.text)
+        except json.JSONDecodeError:
+            payload = {"type": envelope.type, "session_id": envelope.session_id}
+        payload.setdefault("type", envelope.type)
+        await broadcast_event(cfg.dashboard_ws, payload)
+        return {"status": "ok", "routed_to": "dashboard"}
 
     if envelope.type != "user_input":
         return {"status": "ignored", "type": envelope.type}

@@ -1,6 +1,6 @@
-# GBrain + OpenClaw for Donna
+# Optional GBrain + OpenClaw for Donna
 
-Donna's **M2 agent memory** runs on [OpenClaw's built-in SQLite index](https://docs.openclaw.ai/concepts/memory-builtin) plus optional [GBrain](https://github.com/garrytan/gbrain) for synthesis and graph skills. See [storage-architecture.md](storage-architecture.md) for how the SQLite layers fit together.
+Donna's **M2 agent memory** currently runs on [OpenClaw's built-in SQLite index](https://docs.openclaw.ai/concepts/memory-builtin). [GBrain](https://github.com/garrytan/gbrain) is an optional later-phase add-on for synthesis and graph skills, not a required part of the current stack. See [storage-architecture.md](storage-architecture.md) for how the SQLite layers fit together.
 
 ## Architecture
 
@@ -23,11 +23,11 @@ Ollama / Nemotron (local on Dell GB10)
 | **GBrain** | PGLite (Postgres WASM, not SQLite) | Optional background brain via MCP skills |
 | **Voice context bridge** | Reads M3 SQLite | Fallback when OpenClaw is unavailable |
 
-GBrain replaces the original **ChromaDB** plan in `m3-glue-layer-plan.md` for `memory.search` / `memory.write`. Structured tools (calendar, intake forms) stay in M3 Python glue.
+If we enable it later, GBrain can replace the original **ChromaDB** plan in `m3-glue-layer-plan.md` for `memory.search` / `memory.write`. Structured tools (calendar, intake forms) stay in M3 Python glue.
 
-## Dell GB10 setup (recommended)
+## Dell GB10 setup (optional, later phase)
 
-Run GBrain on the same box as OpenClaw and Ollama.
+Only do this if you explicitly want the optional GBrain layer on top of the baseline OpenClaw + SQLite setup.
 
 ### 1. Install GBrain
 
