@@ -1,0 +1,31 @@
+smtp:
+  host: "127.0.0.1"
+  port: 1025
+
+# Set mode to "imap" to poll an external mailbox instead of running the SMTP listener.
+# Set to "smtp" (default) for local SMTP forwarding.
+mode: "smtp"
+
+imap:
+  host: "imap.gmail.com"       # or imap.outlook.com
+  port: 993
+  use_ssl: true
+  username: ""                 # set DONNA_EMAIL_USER in .env
+  password: ""                 # set DONNA_EMAIL_PASS in .env (Gmail app password)
+  poll_interval_seconds: 30
+  mailbox: "INBOX"
+  mark_read: true
+
+session_router:
+  # M1's IPC endpoint — receives plain email text (no attachment) as user_input
+  # Placeholder — swap for ngrok URL or real M1 endpoint when confirmed
+  url: "http://localhost:8000/ipc"
+
+pipeline:
+  # VLM document pipeline — receives document_ingest envelopes for attachments
+  ingest_url: "http://localhost:8765/ingest"
+
+attachments:
+  # Base directory — files saved to {save_dir}/{case_id}/{filename}
+  # On GBIO this resolves to /gbio/donna/documents via DONNA_ATTACHMENT_DIR in .env
+  save_dir: "/gbio/donna/documents"
