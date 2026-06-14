@@ -10,7 +10,7 @@ VENV="${ROOT}/.venv"
 echo "Donna venv setup — ${ROOT}"
 
 missing=()
-for pkg in python3 python3-venv portaudio19-dev; do
+for pkg in python3 python3-venv python3-full portaudio19-dev; do
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then
     missing+=("$pkg")
   fi
