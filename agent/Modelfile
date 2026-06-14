@@ -1,0 +1,18 @@
+FROM nemotron3-super-120b
+
+# Quantization: Q4_K_M balances quality and VRAM on the GB10
+# At 120B params this lands ~87GB on disk; fits in unified memory with room for KV cache
+PARAMETER temperature 0.3
+PARAMETER top_p 0.9
+PARAMETER top_k 40
+PARAMETER num_ctx 8192
+PARAMETER repeat_penalty 1.1
+PARAMETER num_predict 1024
+
+# Stop tokens for Nemotron / Llama-3 base
+PARAMETER stop "<|end_of_text|>"
+PARAMETER stop "<|eot_id|>"
+PARAMETER stop "<|im_end|>"
+
+# System prompt is injected at agent runtime by donna.yaml — leave blank here
+SYSTEM ""

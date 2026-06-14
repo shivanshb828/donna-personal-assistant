@@ -1,0 +1,147 @@
+# OpenClaw Agent Configuration — Donna
+# M2 owns this file. M2 names tools; M3 implements them.
+# M2 never touches ChromaDB, SQLite schema, STT, TTS, or the IPC transport layer.
+
+name: donna
+version: "1.0.0"
+description: "AI legal secretary for personal injury law firms. Local-only, privacy-first."
+
+# ── Model binding ─────────────────────────────────────────────────────────────
+model:
+  provider: ollama
+  model_id: nemotron3-super-120b   # pulled via: ollama create donna -f agent/Modelfile
+  temperature: 0.3
+  top_p: 0.9
+  top_k: 40
+  num_ctx: 8192
+  repeat_penalty: 1.1
+  num_predict: 1024
+
+# ── Persona ───────────────────────────────────────────────────────────────────
+system_prompt_file: system_prompt.md
+
+# ── Memory (persistent across sessions) ──────────────────────────────────────
+# Backend is GBrain (garrytan/gbrain) — native OpenClaw MCP integration.
+# PGLite mode (Postgres 17 WASM, in-process) — zero server setup, fully local.
+# Embedding provider: Ollama on GB10 (same instance as Nemotron).
+# GBrain replaces ChromaDB: handles vector (pgvector HNSW) + BM25 + knowledge graph.
+# Graph links: client → case → cited_case_law (Donna can traverse relationships).
+# M3 wires the GBrain MCP server; M2 just consumes it via tool calls.
+memory:
+  enabled: true
+  backend: gbrain
+  gbrain_mode: pglite          # local Postgres WASM, no server
+  embedding_provider: ollama   # must point to same Ollama instance as Nemotron
+  session_persistence: true
+  ttl_days: 365
+
+# ── IPC envelope contract ─────────────────────────────────────────────────────
+# Every message Donna receives or emits uses this envelope.
+# M1 defines the transport; Donna reads `text` and writes back with type="agent_response".
+ipc:
+  envelope:
+    source: string        # "voice" | "text" | "tool"
+    session_id: string    # UUID scoped to the current lawyer session
+    text: string          # the payload — transcript or agent reply
+    type: string          # "user_input" | "tool_result" | "agent_response"
+
+# ── Channels ──────────────────────────────────────────────────────────────────
+# voice: transcripts arrive from M3's session router after Whisper STT
+# text:  iMessage or dashboard text input, also routed by M3
+channels:
+  - voice
+  - text
+
+# ── Tool registry ─────────────────────────────────────────────────────────────
+# These are the ONLY tool names Donna may call. Implementations live in M3.
+# Donna calls a tool by emitting { type: "tool_call", tool: <name>, args: {...} }
+# into the IPC channel. M3's session router intercepts and executes.
+tools:
+  # ── Calendar (M3: donna/glue/tools/calendar.py) ───────────────────────────
+  - name: book_calendar
+    description: "Book a calendar event. Required: client_id (str), event_type (consult|deposition|follow_up|court_date|filing_deadline), title (str), scheduled_at (ISO-8601). Optional: duration_minutes (int, default 60), case_id (str), attendee (str), notes (str), lawyer_name (str), price (float)"
+
+  - name: get_upcoming_events
+    description: "List upcoming calendar events. Optional: query (str), case_id (str), limit (int, default 10)"
+
+  - name: check_calendar_conflicts
+    description: "Before booking, check for conflicts or back-to-back events within a buffer window. Required: proposed_start (ISO-8601), proposed_end (ISO-8601). Optional: buffer_minutes (int, default 15), travel_note (str). Returns: conflicts[], warnings[], safe_to_book (bool)"
+
+  # ── Case law — CourtListener API (M3 implements HTTP calls, M2 names) ──────
+  - name: search_case_law
+    description: "Search CourtListener for relevant opinions. Required: query (str). Optional: jurisdiction (comma-separated court IDs e.g. 'ca9,cal'), date_after (YYYY-MM-DD), precedential_only (bool, default true). Returns top 5 opinions with case_name, citation, snippet, courtlistener_url. NEVER fabricate cases — only return what the API returns."
+
+  - name: analyze_case_weaknesses
+    description: "Mini-paralegal: runs 8 targeted CourtListener searches and returns structured weaknesses, strengths, and defense arguments grounded only in retrieved case law. Required: incident_type (str), injuries (str[]), at_fault_party_type (str), jurisdiction_courts (str[]), case_facts_summary (str). Optional: plaintiff_vulnerabilities (str[]). Anti-hallucination enforced: every cited case must have a valid courtlistener_url."
+
+  # ── Context/case DB (M3: donna/glue/test_data.py) ────────────────────────
+  - name: search_context
+    description: "Search cases, facts, notes, documents, and memories. Required: query (str). Optional: limit (int, default 5)"
+
+  - name: create_case_file
+    description: "Create a new client + case record. Required: client_name, dol, incident_type, incident_location, incident_description, injuries. Optional: phone, email, treating_physician, at_fault_party, adverse_carrier, client_carrier, witnesses, police_report_number, state_jurisdiction (default CA)"
+
+  - name: get_case_file
+    description: "Retrieve a case by client name or case_id. Required: query (str)"
+
+  - name: update_case_file
+    description: "Update a field on an existing case. Required: case_id (str), field (str), value (str)"
+
+  - name: list_cases
+    description: "List cases filtered by status. Optional: status (intake|records_gathering|open|closed|all, default all)"
+
+  - name: summarize_document
+    description: "Summarize an uploaded document. Required: document_path (str), case_id (str)"
+
+  # ── High-impact paralegal features (M3 pending) ───────────────────────────
+  - name: check_narrative_consistency
+    description: "Cross-check intake notes, medical records, and police report for inconsistencies the defense will exploit. Required: case_id (str). Returns: inconsistencies[] with source_a, source_b, description for each."
+
+  - name: score_litigation_risk
+    description: "Score case 1-10 on litigation risk using liability clarity, damages docs, plaintiff credibility, insurance limits vs. damages, and jurisdiction verdict trends. Required: case_id (str). Returns: score (int), rationale (str), risk_factors[]."
+
+  - name: profile_adverse_adjuster
+    description: "Given adverse carrier name and jurisdiction, search CourtListener for how that carrier litigates PI claims — settle rate, trial frequency, IME usage. Required: carrier_name (str), jurisdiction (str). Returns: litigation_profile, courtlistener_citations[]."
+
+  - name: log_court_date
+    description: "Record a court date outcome. Required: case_id (str), date (ISO-8601), court (str), outcome (str). Optional: judge (str), notes (str)"
+
+  - name: log_payment
+    description: "Record a payment. Required: case_id (str), amount (float), payment_type (retainer|settlement|fee), date (ISO-8601). Optional: notes (str)"
+
+  - name: get_payment_summary
+    description: "Get payment status for a case. Required: case_id (str)"
+
+# ── Security policy ───────────────────────────────────────────────────────────
+# OpenShell enforces these at the OS level. This section is declarative — the
+# actual enforcement is done by OpenShell reading policies/openShell.yaml.
+security:
+  openShell_policy_file: ../policies/openShell.yaml
+  allow_outbound_network: false
+  filesystem_read:
+    - "./cases/"
+    - "./documents/"
+    - "./agent/"
+  filesystem_write:
+    - "./cases/"
+
+# ── Intake state machine ──────────────────────────────────────────────────────
+# Donna tracks which required fields have been collected in the current session.
+# When all required fields are present, she calls create_case_file automatically.
+intake:
+  required_fields:
+    - client_name
+    - dol
+    - incident_type
+    - incident_location
+    - incident_description
+    - injuries
+  optional_fields:
+    - treating_physician
+    - at_fault_party
+    - adverse_carrier
+    - client_carrier
+    - witnesses
+    - police_report_number
+    - employer
+  auto_create_on_complete: true

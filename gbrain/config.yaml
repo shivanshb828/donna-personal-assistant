@@ -1,0 +1,40 @@
+# GBrain Configuration — Donna
+# Deployed on Dell GBIO (GB10 Grace Blackwell)
+# github.com/garrytan/gbrain
+
+gbrain:
+  mode: pglite                        # Postgres 17 WASM, fully in-process, no server
+  data_dir: /gbio/donna/gbrain        # persistent storage on GBIO local disk
+  embedding:
+    provider: ollama
+    model: nomic-embed-text           # lightweight local embedding model via Ollama
+    base_url: http://localhost:11434  # same Ollama instance as Nemotron
+    dimensions: 768
+  search:
+    vector_weight: 0.6                # pgvector HNSW semantic search weight
+    bm25_weight: 0.4                  # BM25 keyword search weight
+    fusion: rrf                       # Reciprocal Rank Fusion
+    top_k: 10
+  mcp:
+    enabled: true                     # expose GBrain tools to OpenClaw via MCP
+    port: 7700
+
+# Entity types Donna writes and reads
+entity_types:
+  - client
+  - case
+  - calendar_event
+  - case_law
+  - document
+  - payment
+  - court_date
+  - memory
+
+# Relationship types (knowledge graph edges)
+relationship_types:
+  - client_has_case        # client → case
+  - case_has_event         # case → calendar_event
+  - case_cites_law         # case → case_law
+  - case_has_document      # case → document
+  - case_has_payment       # case → payment
+  - case_has_court_date    # case → court_date
