@@ -79,7 +79,7 @@ Press **ENTER** to speak. Donna auto-stops when you go silent (~800ms).
 | `DONNA_KOKORO_VOICE` | `af_heart` | Kokoro voice |
 | `DONNA_PIPER_MODEL` | `en_US-amy-medium` | Piper voice model |
 | `DONNA_OLLAMA_URL` | `http://localhost:11434/api/generate` | Ollama endpoint |
-| `DONNA_MODEL` | `nemotron` | Ollama model name |
+| `DONNA_MODEL` | `nemotron-3-super` on Dell GB10; `nemotron` elsewhere | Ollama model name |
 | `DONNA_OPENCLAW_BIN` | `openclaw` | OpenClaw binary path |
 | `DONNA_CONTEXT_DB` | `data/donna_m3_context.sqlite` | Local SQLite DB for case context lookup |
 | `DONNA_DASHBOARD_WS` | `ws://localhost:3001` | Dashboard WebSocket |

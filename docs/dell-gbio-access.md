@@ -20,7 +20,8 @@ Other host entries seen in `~/.ssh/known_hosts` (may be the same machine on a di
 
 **User:** `dell`
 
-**Hostname (observed):** `promaxgb10-887e`
+**Hostname (confirmed):** `promaxgb10-887e`  
+**Repo path:** `/home/dell/dell-hack`
 
 Auth is key- or password-based on the event network. If non-interactive SSH fails with `Permission denied (publickey,password)`, use an interactive terminal or load the correct key into your agent first.
 
@@ -70,15 +71,24 @@ cp data/donna_m3_context.sqlite data/donna_m3_calendar.sqlite /gbio/donna/ 2>/de
 
 ## Service ports (localhost on Dell)
 
-| Service | Port | Env var | Owner |
-|---------|------|---------|-------|
-| faster-whisper STT | 9000 | `DONNA_STT_URL` | Shivansh |
-| Kokoro TTS | 8880 | `DONNA_KOKORO_URL` | Shivansh |
-| Ollama + Nemotron | 11434 | `DONNA_OLLAMA_URL` | Shivansh |
-| React dashboard WS | 3001 | `DONNA_DASHBOARD_WS` | Dhruva |
-| OpenClaw + GBrain | CLI + MCP | `DONNA_OPENCLAW_BIN` | Aayush |
+Confirmed on `promaxgb10-887e` (2026-06-14):
 
-Quick health check from your laptop (while SSH tunnel or on-box):
+| Service | Port | Bind | Docker | Env var | Owner | Status |
+|---------|------|------|--------|---------|-------|--------|
+| faster-whisper STT | 9000 | 0.0.0.0 | `whisper` (→8000) | `DONNA_STT_URL` | Shivansh | Up |
+| Kokoro TTS | 8880 | 0.0.0.0 | `kokoro` | `DONNA_KOKORO_URL` | Shivansh | Up |
+| Ollama | 11434 | 127.0.0.1 | native | `DONNA_OLLAMA_URL`, `DONNA_MODEL` | Shivansh | Up |
+| React dashboard WS | 3001 | — | — | `DONNA_DASHBOARD_WS` | Dhruva | Down |
+| OpenClaw | CLI | — | — | `DONNA_OPENCLAW_BIN` | Aayush | Installed |
+| GBrain | MCP | — | — | — | Aayush | Not installed |
+
+Ollama model on box (June 14):
+
+```bash
+export DONNA_MODEL=nemotron-3-super
+```
+
+Quick health check on the Dell:
 
 ```bash
 bash scripts/check_services.sh
@@ -113,6 +123,7 @@ Then run voice pipeline on your Mac with defaults unchanged, or run everything o
 
 | Symptom | Check |
 |---------|-------|
+| `cd dell-hack: No such file or directory` | Run `git clone https://github.com/shivanshb828/dell-hack.git` from `~` first |
 | SSH refused | Confirm you're on event Wi‑Fi / VPN; try alternate IP from table above |
 | STT 9000 down | `curl -s -o /dev/null -w '%{http_code}' localhost:9000` on Dell |
 | Ollama empty | `curl localhost:11434/api/tags` — run `ollama pull nemotron` |
