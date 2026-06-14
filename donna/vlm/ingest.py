@@ -26,11 +26,17 @@ from pydantic import BaseModel
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 
-OLLAMA_URL   = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+from donna.telephony.config import TelephonyConfig
+
+OLLAMA_URL   = os.getenv("DONNA_OLLAMA_URL", "http://localhost:11434")
 VLM_MODEL    = os.getenv("DONNA_VLM_MODEL", "qwen2.5-vl:latest")
-DB_PATH      = os.getenv("DONNA_DB_PATH", "./donna/knowledge/donna.db")
 CHROMA_HOST  = os.getenv("CHROMA_HOST", "localhost")
 CHROMA_PORT  = int(os.getenv("CHROMA_PORT", "8001"))
+
+# Use the same SQLite paths as voice pipeline and IPC server
+_cfg = TelephonyConfig.from_env()
+CONTEXT_DB   = str(_cfg.context_db)   # donna_m3_context.sqlite — cases, clients, notes
+CALENDAR_DB  = str(_cfg.calendar_db)  # donna_m3_calendar.sqlite
 
 _chroma = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
 _collection = _chroma.get_or_create_collection("donna_documents")
@@ -141,7 +147,7 @@ def _build_vlm_prompt(doc_type: str, filename: str) -> str:
 
 def _save_to_sqlite(*, doc_id, case_id, filename, doc_type, file_path, summary):
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(CONTEXT_DB)
         conn.execute(
             """INSERT OR REPLACE INTO documents
                (id, case_id, filename, doc_type, file_path, summary)
