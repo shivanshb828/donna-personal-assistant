@@ -1,7 +1,13 @@
 # Donna Voice Pipeline
 
-Local, zero-cloud voice interface for Donna — PI attorney AI assistant.
+Local, zero-cloud voice interface for Donna — AI OS extension for legal intake.
 Built for Dell x NVIDIA Hackathon, June 14 2026.
+
+Donna answers inbound client calls autonomously (via Twilio), runs the full intake
+flow over voice, and hands the lawyer a structured email summary. All compute runs
+locally on Dell GB10 — no audio or case data leaves the machine.
+
+See `README.md` for product overview and demo script.
 
 ## Architecture
 
