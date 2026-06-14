@@ -1,0 +1,16 @@
+# voice pipeline
+pyaudio
+faster-whisper
+websockets
+httpx
+
+# email pipeline
+aiosmtpd
+aiosmtplib
+beautifulsoup4
+lxml
+pyyaml
+
+# test
+pytest
+pytest-asyncio
