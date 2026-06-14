@@ -37,14 +37,16 @@ openclaw run donna --input "How is Maria Lopez doing?"
 
 ## Voice pipeline integration
 
-The voice stack calls OpenClaw first; GBrain is consulted inside the agent, not from Python directly (today):
+This branch does not route the voice stack through OpenClaw yet. `donna/voice/pipeline.py`
+loads case context from `donna/glue/context_bridge.py` and then calls Ollama directly.
+OpenClaw and GBrain are a parallel M2 path you can run separately:
 
 ```bash
-export DONNA_OPENCLAW_BIN=openclaw
+openclaw run donna --input "How is Maria Lopez doing?"
 cd dell-hack/donna && python3 -m voice.pipeline
 ```
 
-When OpenClaw is down, pipeline falls back to Ollama with SQLite context from `donna/glue/context_bridge.py`.
+If you want voice to use OpenClaw, that wiring still needs to be implemented.
 
 ## Install via agent
 

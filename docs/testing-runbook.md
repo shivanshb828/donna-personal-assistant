@@ -6,10 +6,10 @@ Single reference for validating Donna across M3 glue, voice, and Dell services. 
 
 ```bash
 python3 -m unittest discover -s tests -v
-cd donna && python3 -m pytest voice/tests/ -v
+cd donna && python3 -m pytest voice/tests/ telephony/tests/ -v
 ```
 
-Expected: **4** unittest cases, **30** pytest cases (all mocked — no mic/STT server required).
+Expected: **5** unittest cases, **54** pytest cases (voice + telephony mocked — no mic/STT/Twilio required).
 
 ## M3 glue layer
 
@@ -84,6 +84,29 @@ bash scripts/run_voice.sh
 # Say "How is Maria doing?" — expect [Loaded case context from local DB]
 ```
 
+## Telephony (Twilio bridge)
+
+Unit tests (no Twilio/ngrok):
+
+```bash
+cd donna && python3 -m pytest telephony/tests/ -v
+```
+
+Local server smoke:
+
+```bash
+bash scripts/run_telephony.sh
+curl http://localhost:3002/health
+```
+
+Echo mode (Twilio loopback, no STT/LLM):
+
+```bash
+DONNA_TELEPHONY_ECHO=true bash scripts/run_telephony.sh
+```
+
+See [twilio-setup.md](twilio-setup.md) for ngrok + Twilio console wiring.
+
 ## Dell service health
 
 On the Dell (or via SSH):
@@ -110,7 +133,7 @@ There is no GitHub Actions workflow yet. Minimum bar before merge:
 
 ```bash
 python3 -m unittest discover -s tests
-cd donna && python3 -m pytest voice/tests/ -q
+cd donna && python3 -m pytest voice/tests/ telephony/tests/ -q
 ```
 
 Optional on Dell with services running:
@@ -128,3 +151,5 @@ bash scripts/check_services.sh
 - [Dell GBIO access](dell-gbio-access.md) — SSH and port forwarding
 - [Hackathon quickstart](hackathon-quickstart.md) — team roles and module map
 - [Voice pipeline](../donna/VOICE_PIPELINE.md) — architecture and env vars
+- [Telephony](../donna/telephony/README.md) — Twilio phone agent
+- [Twilio setup](twilio-setup.md)

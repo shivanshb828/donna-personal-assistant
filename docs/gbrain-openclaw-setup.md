@@ -96,7 +96,9 @@ Point OpenClaw at the Donna agent config and ensure the GBrain plugin is enabled
 openclaw run donna --input "How is Maria Lopez doing?"
 ```
 
-Voice pipeline already calls this via `DONNA_OPENCLAW_BIN` (see `donna/voice/pipeline.py`).
+The voice pipeline in this branch does not call OpenClaw yet. It uses the local SQLite
+context bridge and then posts directly to Ollama. Treat `openclaw run donna` as a separate
+agent path until voice-agent routing is implemented.
 
 ### 5. Start GBrain server (background)
 
@@ -137,7 +139,6 @@ See [storage-architecture.md](storage-architecture.md).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DONNA_OPENCLAW_BIN` | `openclaw` | OpenClaw CLI |
 | `DONNA_GBRAIN_URL` | `http://localhost:8765/mcp` | GBrain MCP HTTP endpoint (when wired) |
 | `DONNA_GBRAIN_TOKEN` | — | OAuth/token if using remote GBrain |
 | `DONNA_BRAIN_REPO` | `~/donna-brain` | Markdown brain git repo path |
@@ -162,7 +163,7 @@ gbrain doctor --json
 # OpenClaw + brain query
 openclaw run donna --input "Summarize case-2026-001 for Maria Lopez"
 
-# Voice loop (OpenClaw path uses GBrain internally)
+# Voice loop (separate direct-Ollama path in this branch)
 cd donna && python3 -m voice.pipeline
 
 # Services on Dell

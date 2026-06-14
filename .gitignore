@@ -3,3 +3,5 @@ __pycache__/
 .pytest_cache/
 openclaw/workspace/
 .venv/
+data/donna_telephony.sqlite
+donna/data/donna_telephony.sqlite
