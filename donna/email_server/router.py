@@ -126,20 +126,50 @@ async def _route_email_text(parsed: dict, session_id: str) -> None:
     client_email = parsed.get("sender", "unknown")
     subject = parsed.get("subject", "")
     body = parsed.get("body", "")
+    attachments = parsed.get("attachments", [])
+    case_id = session_id
 
-    intake_body = (
-        f"New intake received via email.\n\n"
-        f"From: {client_email}\n"
-        f"Subject: {subject}\n\n"
-        f"--- Client Message ---\n{body}\n\n"
-        f"--- Donna's Assessment ---\n{donna_reply or '(no reply captured)'}\n"
-    )
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).strftime("%B %d, %Y at %I:%M %p UTC")
+
+    attachment_lines = ""
+    if attachments:
+        names = [a.get("filename", "unknown") for a in attachments]
+        attachment_lines = f"\nDocuments received ({len(names)}):\n" + "\n".join(f"  • {n}" for n in names) + "\n"
+
+    intake_body = f"""\
+Hi Dhruva,
+
+A new client intake has been received and processed by Donna.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CASE SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Case ID:   {case_id}
+Received:  {now}
+From:      {client_email}
+{attachment_lines}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CLIENT MESSAGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{body.strip()}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DONNA'S ASSESSMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{donna_reply.strip() if donna_reply else "(No assessment captured — check IPC logs)"}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+This summary was generated automatically by Donna AI Legal Secretary.
+Reply to this email or contact the client directly at {client_email}.
+"""
 
     from .sender import send_email as _send
     try:
         outcome = await _send(
             to=_LAWYER_EMAIL,
-            subject=f"[Intake] {subject}",
+            subject=f"[New Intake] {case_id} — {client_email}",
             body=intake_body,
             case_id=session_id,
             email_type="appointment_confirmation",  # auto-send, no approval gate
