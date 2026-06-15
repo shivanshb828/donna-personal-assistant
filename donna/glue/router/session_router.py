@@ -170,7 +170,7 @@ class SessionRouter:
                 elif not reply:
                     reply = self._tool_fallback(tool_results)
         elif not reply:
-            reply = "I understand. Could you tell me a bit more about what happened?"
+            reply = "Got that. What else can you tell me about the incident?"
 
         if not reply:
             reply = self._tool_fallback(tool_results)
@@ -302,7 +302,7 @@ class SessionRouter:
                             first_sentence_seconds=first_sentence_seconds,
                         )
         elif not reply:
-            reply = "I understand. Could you tell me a bit more about what happened?"
+            reply = "Got that. What else can you tell me about the incident?"
             first_sentence_seconds = await self._emit_reply_text(
                 reply,
                 on_sentence=on_sentence,
@@ -342,7 +342,7 @@ class SessionRouter:
                 return "Thank you for sharing your situation. We aren't able to take this case, but I wish you the best."
             if item.get("tool") == "case.create":
                 return "I've opened the case details. If you'd like, we can book the next step now."
-        return "Thanks - I've noted that. What else can you tell me about the incident?"
+        return "Noted. What else should I know about the incident?"
 
     @staticmethod
     def _immediate_tool_reply(tool_results: list[dict]) -> str | None:

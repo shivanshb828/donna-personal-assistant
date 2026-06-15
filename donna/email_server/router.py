@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import os
+import random
+import re
 import uuid
 
 import httpx
@@ -98,16 +100,50 @@ async def _route_document_ingest(parsed: dict, attachment: dict, session_id: str
     await _post_with_retry(config.PIPELINE_INGEST_URL, envelope, label)
 
 
-_MISSING_DOCS_REQUEST = """\
-When you get a chance, send over whatever you have:
+_MISSING_DOCS_VARIANTS = [
+    """\
+Send over whatever you have when you get a chance:
 
   • Police or incident report
-  • ER discharge summary or medical records
-  • Photos of the scene, injuries, or damage
+  • ER or hospital discharge summary
+  • Photos — scene, injuries, vehicle damage
   • Your insurance info and the other party's
 
-Don't worry if you don't have everything — send what you have and we'll sort the rest.\
-""".strip()
+Don't need everything right now. Send what you have and we'll work with it.""",
+    """\
+If you have any of these, send them when you can:
+
+  • Incident or police report
+  • Medical records or ER paperwork
+  • Photos of the scene or your injuries
+  • Insurance cards (yours and theirs)
+
+Whatever you've got is a start.""",
+    """\
+A few things that'll help the attorney review your case:
+
+  • Any police or incident report
+  • Medical records / discharge papers
+  • Scene or injury photos
+  • Insurance info from both sides
+
+No rush — pull together what you have.""",
+]
+
+# Regex to catch tool-name artifacts leaking into client-facing replies
+_TOOL_NAME_RE = re.compile(
+    r"\b(intake\.(start|update)|case\.(qualify|create|decline)|calendar\.create_event"
+    r"|notify\.dashboard|record_consent|schedule_followup)\b",
+    re.IGNORECASE,
+)
+
+
+def _clean_reply(text: str) -> str:
+    """Strip tool-call artifacts that the LLM occasionally leaks into reply text."""
+    text = _TOOL_NAME_RE.sub("", text)
+    # Collapse multiple blank lines left by removal
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 async def _route_email_text(parsed: dict, session_id: str) -> None:
@@ -135,7 +171,8 @@ async def _route_email_text(parsed: dict, session_id: str) -> None:
     phase = "UNKNOWN"
     tool_results: list = []
     if result:
-        donna_reply = result.get("reply") or result.get("text") or ""
+        raw_reply = result.get("reply") or result.get("text") or ""
+        donna_reply = _clean_reply(raw_reply)
         phase = result.get("phase", "UNKNOWN")
         tool_results = result.get("tool_results") or []
 
@@ -152,10 +189,16 @@ async def _route_email_text(parsed: dict, session_id: str) -> None:
 
     # ── 1. Reply to CLIENT ────────────────────────────────────────────────────
     missing_docs = not attachments
-    doc_request_block = f"\n\n{_MISSING_DOCS_REQUEST}" if missing_docs else ""
+    doc_request_block = f"\n\n{random.choice(_MISSING_DOCS_VARIANTS)}" if missing_docs else ""
+
+    fallback_reply = random.choice([
+        "Got your message. We'll be in touch shortly.",
+        "Received. Someone will follow up with you soon.",
+        "Thanks — we have your message and will be in touch.",
+    ])
 
     client_body = f"""\
-{donna_reply.strip() if donna_reply else "Got your message. We'll be in touch shortly."}
+{donna_reply if donna_reply else fallback_reply}
 {doc_request_block}
 
 — Donna
