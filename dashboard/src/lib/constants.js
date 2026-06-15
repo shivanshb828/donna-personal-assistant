@@ -41,6 +41,7 @@ export const TOOL_TO_PHASE = {
   'case.create': 'CLOSE',
   'case.decline': 'CLOSE',
   'calendar.create_event': 'BOOKING',
+  schedule_followup: 'BOOKING',
   'notify.dashboard': 'CLOSE',
 }
 
