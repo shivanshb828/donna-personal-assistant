@@ -99,16 +99,14 @@ async def _route_document_ingest(parsed: dict, attachment: dict, session_id: str
 
 
 _MISSING_DOCS_REQUEST = """\
-To move your case forward, we'll need a few documents from you. Please reply to this email
-with any of the following you have available:
+When you get a chance, send over whatever you have:
 
-  • Police report or incident report (if applicable)
-  • Medical records or ER discharge summary
-  • Photos of injuries, property damage, or the scene
-  • Insurance information (yours and the other party's)
-  • Any correspondence with the other party's insurance company
+  • Police or incident report
+  • ER discharge summary or medical records
+  • Photos of the scene, injuries, or damage
+  • Your insurance info and the other party's
 
-You don't need all of these right away — send what you have and we'll follow up on the rest.
+Don't worry if you don't have everything — send what you have and we'll sort the rest.\
 """.strip()
 
 
@@ -157,12 +155,10 @@ async def _route_email_text(parsed: dict, session_id: str) -> None:
     doc_request_block = f"\n\n{_MISSING_DOCS_REQUEST}" if missing_docs else ""
 
     client_body = f"""\
-{donna_reply.strip() if donna_reply else "Thanks for reaching out. We've received your message and will be in touch shortly."}
+{donna_reply.strip() if donna_reply else "Got your message. We'll be in touch shortly."}
 {doc_request_block}
 
-—
-Donna | AI Legal Secretary
-Reply to this email at any time and I'll pick it up within minutes.
+— Donna
 """
     try:
         outcome = await _send(

@@ -74,6 +74,9 @@ def _connect() -> imaplib.IMAP4_SSL | imaplib.IMAP4:
     return conn
 
 
+_seen_uids: set[bytes] = set()  # dedup across poll cycles within one process lifetime
+
+
 async def poll_once() -> int:
     """Fetch and route all unread emails. Returns count processed."""
     loop = asyncio.get_event_loop()
@@ -92,6 +95,10 @@ async def poll_once() -> int:
 
     tasks = []
     for uid, raw in items:
+        if uid in _seen_uids:
+            log.debug("Skipping already-processed uid=%s", uid)
+            continue
+        _seen_uids.add(uid)
         try:
             parsed = parse_email(raw)
             log.info(
@@ -107,7 +114,7 @@ async def poll_once() -> int:
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
 
-    return len(items)
+    return len(tasks)
 
 
 async def run_poller():
