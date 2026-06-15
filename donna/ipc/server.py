@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from donna.glue.router.session_router import SessionRouter
@@ -84,6 +85,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Donna IPC Server", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class IPCEnvelope(BaseModel):

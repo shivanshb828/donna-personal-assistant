@@ -367,6 +367,7 @@ export default function App() {
         stats={state.stats}
         demoRunning={state.demoRunning}
         onRunDemo={runDemo}
+        wsConnected={state.wsConnected}
       />
     ),
     cases: <CasesView cases={cases} />,

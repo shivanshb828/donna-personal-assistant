@@ -325,9 +325,9 @@ function ActivityFeed({ activities, activeCall }) {
 
 // ── Idle State ────────────────────────────────────────────────────────────────
 
-function IdleState({ stats, demoRunning, onRunDemo }) {
+function IdleState({ stats, demoRunning, onRunDemo, wsConnected }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-8 py-16">
+    <div className="flex-1 flex flex-col items-center justify-center px-8 py-12">
       {/* Emblem */}
       <div className="w-16 h-16 rounded-xl border-2 border-legal-gold-border bg-legal-gold-light flex items-center justify-center mb-6 shadow-md">
         <svg viewBox="0 0 24 24" fill="none" stroke="#B8860B" strokeWidth={1.5} className="w-8 h-8">
@@ -339,11 +339,11 @@ function IdleState({ stats, demoRunning, onRunDemo }) {
         Donna is standing by
       </h1>
       <p className="text-ink-500 mt-2 text-center max-w-sm text-sm leading-relaxed">
-        Waiting for inbound calls. Donna will handle intake, qualification, and scheduling automatically.
+        Waiting for inbound calls or emails. Donna handles intake, qualification, and scheduling automatically.
       </p>
 
       {/* Stats */}
-      <div className="mt-10 grid grid-cols-3 gap-4 w-full max-w-md">
+      <div className="mt-8 grid grid-cols-3 gap-4 w-full max-w-md">
         {[
           { label: 'Calls Today', value: stats.callsToday },
           { label: 'Cases Created', value: stats.casesCreated },
@@ -356,24 +356,58 @@ function IdleState({ stats, demoRunning, onRunDemo }) {
         ))}
       </div>
 
-      {/* Demo CTA */}
-      <button
-        onClick={onRunDemo}
-        disabled={demoRunning}
-        className={`mt-8 flex items-center gap-2.5 px-6 py-3 rounded-md text-sm font-semibold transition-all ${
-          demoRunning
-            ? 'bg-parchment-100 text-ink-400 border border-parchment-200 cursor-not-allowed'
-            : 'bg-legal-navy text-white hover:bg-legal-navy-hover shadow-card-md'
-        }`}
-      >
-        <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-          <path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" />
-        </svg>
-        {demoRunning ? 'Demo in progress…' : 'Run Demo Intake Call'}
-      </button>
+      {/* Two modes */}
+      <div className="mt-8 grid grid-cols-2 gap-4 w-full max-w-md">
+        {/* Simulate */}
+        <div className="bg-white rounded-lg border border-parchment-200 shadow-card p-5 flex flex-col items-center text-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-legal-navy flex items-center justify-center">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white">
+              <path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-ink-800">Simulate</p>
+            <p className="text-[11px] text-ink-400 mt-0.5">Replay a full PI intake call (~60s)</p>
+          </div>
+          <button
+            onClick={onRunDemo}
+            disabled={demoRunning}
+            className={`w-full py-2 rounded-md text-[13px] font-semibold transition-all ${
+              demoRunning
+                ? 'bg-parchment-100 text-ink-400 cursor-not-allowed'
+                : 'bg-legal-navy text-white hover:bg-legal-navy-hover'
+            }`}
+          >
+            {demoRunning ? 'Running…' : 'Run Demo'}
+          </button>
+        </div>
 
-      <p className="mt-3 text-[11px] text-ink-400 text-center">
-        Simulates a full PI intake call · ~60 seconds
+        {/* Real call */}
+        <div className="bg-white rounded-lg border border-parchment-200 shadow-card p-5 flex flex-col items-center text-center gap-3">
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${wsConnected ? 'bg-legal-forest' : 'bg-parchment-200'}`}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-ink-800">Real Call / Email</p>
+            <p className="text-[11px] text-ink-400 mt-0.5">
+              {wsConnected ? 'Live — Donna is online' : 'Waiting for connection'}
+            </p>
+          </div>
+          <div className={`w-full py-2 rounded-md text-[13px] font-semibold flex items-center justify-center gap-2 ${
+            wsConnected
+              ? 'bg-legal-forest-light border border-legal-forest-border text-legal-forest'
+              : 'bg-parchment-100 text-ink-400'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-legal-forest dot-live' : 'bg-ink-300'}`} />
+            {wsConnected ? 'Listening' : 'Offline'}
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-5 text-[11px] text-ink-400 text-center">
+        Real calls via Twilio · Emails via IMAP · All local — no cloud
       </p>
     </div>
   )
@@ -391,6 +425,7 @@ export default function LiveCallView({
   stats,
   demoRunning,
   onRunDemo,
+  wsConnected,
 }) {
   const hasActivity = activeCall || transcript.length > 0 || activities.length > 0
 
@@ -420,7 +455,7 @@ export default function LiveCallView({
       </div>
 
       {!hasActivity ? (
-        <IdleState stats={stats} demoRunning={demoRunning} onRunDemo={onRunDemo} />
+        <IdleState stats={stats} demoRunning={demoRunning} onRunDemo={onRunDemo} wsConnected={wsConnected} />
       ) : (
         <div className="flex-1 overflow-hidden flex flex-col px-6 py-5 gap-4">
           {/* Call banner */}
