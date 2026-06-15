@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,10 @@ from donna.telephony.llm import DonnaLLM
 from donna.telephony.tokens import StreamTokenStore
 from donna.telephony.twilio_validate import read_twilio_form, request_url, validate_twilio_signature
 from donna.telephony.twiml import build_hangup_twiml, build_stream_twiml
+from donna.voice.stt import warm_stt
+from donna.voice.tts import warm_tts
+
+STARTUP_WARM_TIMEOUT_SECONDS = 15.0
 
 
 async def _validate_twilio(request: Request, cfg: TelephonyConfig, path: str, form_data: dict[str, str]) -> bool:
@@ -55,8 +60,30 @@ async def _validate_twilio(request: Request, cfg: TelephonyConfig, path: str, fo
 def create_app(config: TelephonyConfig | None = None) -> FastAPI:
     cfg = config or TelephonyConfig.from_env()
     init_telephony_db(cfg.telephony_db)
+    shared_llm = DonnaLLM(ollama_url=cfg.ollama_url, model=cfg.ollama_model)
 
-    app = FastAPI(title="Donna Telephony", version="0.1.0")
+    async def _run_warm(label: str, fn) -> Exception | None:
+        try:
+            await asyncio.wait_for(asyncio.to_thread(fn), timeout=STARTUP_WARM_TIMEOUT_SECONDS)
+        except Exception as exc:
+            return RuntimeError(f"{label}: {exc}")
+        return None
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        started = time.perf_counter()
+        results = await asyncio.gather(
+            _run_warm("llm", shared_llm.warm),
+            _run_warm("stt", warm_stt),
+            _run_warm("tts", warm_tts),
+        )
+        for result in results:
+            if result is not None:
+                print(f"[Warmup warning] {result}")
+        print(f"[Warmup] completed in {time.perf_counter() - started:.2f}s")
+        yield
+
+    app = FastAPI(title="Donna Telephony", version="0.1.0", lifespan=lifespan)
     tokens = StreamTokenStore()
     sessions: dict[str, LocalVoiceSession] = {}
 
@@ -72,7 +99,7 @@ def create_app(config: TelephonyConfig | None = None) -> FastAPI:
             telephony_db_path=cfg.telephony_db,
             context_db_path=cfg.context_db,
             calendar_db_path=cfg.calendar_db,
-            llm=DonnaLLM(ollama_url=cfg.ollama_url, model=cfg.ollama_model),
+            llm=shared_llm,
             tools=_tool_registry(),
             firm_name=cfg.firm_name,
         )
@@ -366,6 +393,148 @@ def create_app(config: TelephonyConfig | None = None) -> FastAPI:
         if result.get("status") == "error":
             return JSONResponse(result, status_code=422)
         return JSONResponse(result)
+
+    @app.post("/api/query")
+    async def api_query(request: Request) -> JSONResponse:
+        body = await request.json()
+        question = (body.get("question") or "").strip()
+        if not question:
+            return JSONResponse({"error": "question is required"}, status_code=400)
+        openclaw_url = os.getenv("OPENCLAW_GATEWAY_URL", "http://localhost:7701")
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    f"{openclaw_url}/query",
+                    json={"question": question},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                answer = data.get("answer") or data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                return JSONResponse({"answer": answer, "source": "openclaw"})
+        except Exception:
+            pass
+        try:
+            from donna.lawyer.agent import ask as lawyer_ask
+            answer = await asyncio.to_thread(lawyer_ask, question)
+            return JSONResponse({"answer": answer, "source": "ollama-direct"})
+        except Exception as exc:
+            return JSONResponse({"error": str(exc)}, status_code=500)
+
+    @app.post("/api/gameplan")
+    async def api_gameplan(request: Request) -> JSONResponse:
+        import sqlite3
+        from datetime import date
+        body = await request.json()
+        case_id = (body.get("case_id") or "").strip()
+        if not case_id:
+            return JSONResponse({"error": "case_id is required"}, status_code=400)
+        case: dict = {}
+        for db_path, query, params in [
+            (cfg.context_db, "SELECT * FROM intakes WHERE case_id=? ORDER BY created_at DESC LIMIT 1", (case_id,)),
+            (cfg.telephony_db, "SELECT * FROM call_sessions WHERE call_sid=? LIMIT 1", (case_id,)),
+        ]:
+            try:
+                with sqlite3.connect(db_path) as conn:
+                    conn.row_factory = sqlite3.Row
+                    row = conn.execute(query, params).fetchone()
+                    if row:
+                        case = dict(row)
+                        break
+            except Exception:
+                pass
+        if not case:
+            case = {"case_id": case_id, "stage": "intake"}
+
+        def _risk(c: dict) -> dict:
+            score, flags = 0, []
+            sol = c.get("sol_date") or c.get("statute_of_limitations")
+            if sol:
+                try:
+                    days = (date.fromisoformat(sol[:10]) - date.today()).days
+                    if days < 0: score += 50; flags.append("SOL EXPIRED")
+                    elif days < 30: score += 35; flags.append(f"SOL in {days}d — urgent")
+                    elif days < 90: score += 15; flags.append(f"SOL in {days}d")
+                except Exception: pass
+            fault = (c.get("fault_party") or "").lower()
+            if not fault: score += 10; flags.append("Fault party unclear")
+            elif "shared" in fault or "partial" in fault: score += 8; flags.append("Shared fault")
+            if c.get("prior_attorney"): score += 12; flags.append("Prior attorney — check fee lien")
+            tx = (c.get("treatment_status") or "").lower()
+            if not tx or tx == "none": score += 10; flags.append("No documented treatment")
+            elif "ongoing" in tx: score -= 5
+            score = max(0, min(100, score))
+            label, color = ("High Risk", "red") if score >= 50 else ("Medium Risk", "amber") if score >= 25 else ("Low Risk", "green")
+            return {"score": score, "label": label, "color": color, "flags": flags}
+
+        def _plan(c: dict, risk: dict) -> dict:
+            steps = []
+            inc = (c.get("incident_type") or c.get("case_type") or "auto_accident").lower()
+            if c.get("stage", "intake") == "intake":
+                steps.append({"priority": "high", "action": "Complete signed retainer agreement", "owner": "Attorney"})
+                steps.append({"priority": "high", "action": "Obtain all medical records & bills", "owner": "Donna"})
+                steps.append({"priority": "high", "action": "Preserve evidence (photos, dashcam, witnesses)", "owner": "Client"})
+            if "auto" in inc or "vehicle" in inc:
+                steps += [
+                    {"priority": "high", "action": "Order police report", "owner": "Donna"},
+                    {"priority": "high", "action": "Notify client insurer of representation", "owner": "Attorney"},
+                    {"priority": "medium", "action": "Request adjuster assignment & claim number", "owner": "Donna"},
+                ]
+            elif "slip" in inc or "fall" in inc:
+                steps += [
+                    {"priority": "high", "action": "Obtain incident report from property owner", "owner": "Donna"},
+                    {"priority": "high", "action": "Preserve surveillance footage (72-hr window)", "owner": "Attorney"},
+                ]
+            for flag in risk["flags"]:
+                if "SOL" in flag:
+                    steps.insert(0, {"priority": "urgent", "action": f"⚠️  {flag} — file or toll immediately", "owner": "Attorney"})
+            tx = (c.get("treatment_status") or "").lower()
+            if "surgery" in tx or "hospital" in tx: sr = "$50,000 – $250,000+"
+            elif "ongoing" in tx or "physical therapy" in tx: sr = "$15,000 – $75,000"
+            elif tx and tx != "none": sr = "$5,000 – $25,000"
+            else: sr = "TBD — awaiting medical evaluation"
+            return {"steps": steps, "settlement_range": sr, "case_type": inc, "stage": c.get("stage", "intake")}
+
+        import datetime
+        risk = _risk(case)
+        plan = _plan(case, risk)
+        return JSONResponse({"case_id": case_id, "risk": risk, "game_plan": plan,
+                             "generated_at": datetime.datetime.utcnow().isoformat()})
+
+    @app.get("/api/cases/{case_id}/risk")
+    async def api_case_risk(case_id: str) -> JSONResponse:
+        import sqlite3
+        from datetime import date
+        case: dict = {}
+        for db_path, query, params in [
+            (cfg.context_db, "SELECT * FROM intakes WHERE case_id=? ORDER BY created_at DESC LIMIT 1", (case_id,)),
+            (cfg.telephony_db, "SELECT * FROM call_sessions WHERE call_sid=? LIMIT 1", (case_id,)),
+        ]:
+            try:
+                with sqlite3.connect(db_path) as conn:
+                    conn.row_factory = sqlite3.Row
+                    row = conn.execute(query, params).fetchone()
+                    if row:
+                        case = dict(row)
+                        break
+            except Exception:
+                pass
+        if not case:
+            case = {}
+        score, flags = 0, []
+        sol = case.get("sol_date") or case.get("statute_of_limitations")
+        if sol:
+            try:
+                days = (date.fromisoformat(sol[:10]) - date.today()).days
+                if days < 0: score += 50; flags.append("SOL EXPIRED")
+                elif days < 30: score += 35; flags.append(f"SOL in {days}d — urgent")
+                elif days < 90: score += 15; flags.append(f"SOL in {days}d")
+            except Exception: pass
+        if case.get("prior_attorney"): score += 12; flags.append("Prior attorney")
+        tx = (case.get("treatment_status") or "").lower()
+        if not tx or tx == "none": score += 10; flags.append("No documented treatment")
+        score = max(0, min(100, score))
+        label, color = ("High Risk", "red") if score >= 50 else ("Medium Risk", "amber") if score >= 25 else ("Low Risk", "green")
+        return JSONResponse({"case_id": case_id, "risk": {"score": score, "label": label, "color": color, "flags": flags}})
 
     return app
 

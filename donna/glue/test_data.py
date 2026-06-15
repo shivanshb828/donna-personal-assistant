@@ -98,141 +98,18 @@ def init_context_db(db_path: Path) -> None:
         )
 
 
+
+
 def seed_context_db(db_path: Path) -> None:
-    with connect(db_path) as conn:
-        conn.executescript(
-            """
-            DROP TABLE IF EXISTS memories;
-            DROP TABLE IF EXISTS documents;
-            DROP TABLE IF EXISTS case_notes;
-            DROP TABLE IF EXISTS facts;
-            DROP TABLE IF EXISTS cases;
-            DROP TABLE IF EXISTS clients;
-            """
-        )
-    init_context_db(db_path)
-    with connect(db_path) as conn:
-        for table in ("memories", "documents", "case_notes", "facts", "cases", "clients"):
-            conn.execute(f"DELETE FROM {table}")
-
-        clients = [
-            ("client-maria-lopez", "Maria Lopez", "+14085550101", "maria.lopez@example.com", 1, 1, 1),
-            ("client-andre-patel", "Andre Patel", "+15105550102", "andre.patel@example.com", 1, 1, 1),
-        ]
-        conn.executemany(
-            (
-                "INSERT INTO clients "
-                "(id, name, phone, email, consent_recording, consent_ai_disclosure, consent_data_storage) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)"
-            ),
-            clients,
-        )
-
-        cases = [
-            (
-                "case-2026-001",
-                "client-maria-lopez",
-                "auto_accident",
-                "2026-06-13",
-                "San Jose, CA",
-                "Other driver, details pending",
-                "Neck pain reported after collision",
-                "Medical evaluation pending",
-                "",
-                "intake",
-                "2028-06-13",
-                "CA",
-            ),
-            (
-                "case-2026-002",
-                "client-andre-patel",
-                "slip_fall",
-                "2026-05-28",
-                "Oakland, CA",
-                "Grocery store, liability under investigation",
-                "Wrist pain",
-                "Urgent care visit same day",
-                "",
-                "records_gathering",
-                "2028-05-28",
-                "CA",
-            ),
-        ]
-        conn.executemany(
-            """
-            INSERT INTO cases
-              (id, client_id, case_type, incident_date, incident_location, at_fault_party,
-               injuries, treatment_received, witnesses, status, statute_of_limitations_date,
-               state_jurisdiction)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            cases,
-        )
-
-        notes = [
-            (
-                "note-001",
-                "case-2026-001",
-                "intake_transcript",
-                "Maria Lopez reports being rear-ended at a stop light in San Jose and having neck pain.",
-                "donna",
-            ),
-            (
-                "note-002",
-                "case-2026-002",
-                "medical_update",
-                "Andre Patel reports urgent care treatment after slipping in a grocery aisle.",
-                "donna",
-            ),
-        ]
-        conn.executemany(
-            "INSERT INTO case_notes (id, case_id, note_type, content, created_by) VALUES (?, ?, ?, ?, ?)",
-            notes,
-        )
-
-        facts = [
-            ("case-2026-001", "Insurance", "Other driver reportedly has State Farm.", 0),
-            ("case-2026-001", "Treatment", "Client has not yet completed a medical evaluation.", 0),
-            ("case-2026-001", "Evidence", "Client says photos of bumper damage are available.", 0),
-            ("case-2026-002", "Treatment", "Urgent care visit occurred the same day as the fall.", 1),
-            ("case-2026-002", "Evidence", "Store incident report requested but not received.", 0),
-        ]
-        conn.executemany(
-            "INSERT INTO facts (case_id, label, value, verified) VALUES (?, ?, ?, ?)",
-            facts,
-        )
-
-        documents = [
-            (
-                "doc-001",
-                "case-2026-001",
-                "maria-lopez-intake-notes.md",
-                "intake_notes",
-                "/gbio/donna/cases/case-2026-001/intake-notes.md",
-                "Maria Lopez reports neck pain after a rear-end collision in San Jose.",
-            ),
-            (
-                "doc-002",
-                "case-2026-002",
-                "andre-patel-urgent-care-summary.pdf",
-                "medical_record",
-                "/gbio/donna/cases/case-2026-002/urgent-care-summary.pdf",
-                "Urgent care summary notes wrist pain after a fall and recommends follow-up.",
-            ),
-        ]
-        conn.executemany(
-            "INSERT INTO documents (id, case_id, filename, doc_type, file_path, summary) VALUES (?, ?, ?, ?, ?, ?)",
-            documents,
-        )
-
-        memories = [
-            ("case-2026-001", "case_summary", "Ask Maria for medical evaluation status and insurance claim number."),
-            ("case-2026-002", "case_summary", "Follow up on grocery store incident report and surveillance preservation."),
-        ]
-        conn.executemany(
-            "INSERT INTO memories (case_id, kind, content) VALUES (?, ?, ?)",
-            memories,
-        )
+    """Seed demo context DB with 2 client profiles + firm profile. Used by tests and init scripts."""
+    import sys
+    from pathlib import Path as _Path
+    _scripts = _Path(__file__).resolve().parents[2] / "scripts"
+    if str(_scripts) not in sys.path:
+        sys.path.insert(0, str(_scripts))
+    from seed_demo_unified import _seed_context, _wipe_context
+    _wipe_context(db_path)
+    _seed_context(db_path)
 
 
 def search_context(db_path: Path, query: str, limit: int = 5) -> list[ContextHit]:

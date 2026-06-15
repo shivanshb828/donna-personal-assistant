@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import inspect
+import os
 import re
 import time
 
@@ -32,6 +33,7 @@ class RouterStreamOutcome:
 
 
 SentenceHandler = Callable[[str], Awaitable[None] | None]
+LOCAL_ASSISTANT_SENTENCE_LIMIT = max(1, int(os.getenv("DONNA_LOCAL_SENTENCE_LIMIT", "1")))
 
 
 PHASE_TOOL_NAMES: dict[str, list[str]] = {
@@ -111,8 +113,20 @@ class SessionRouter:
 
         history = self._histories.setdefault(call_sid, [])
         history.append(ChatMessage(role="user", content=user_text))
-        tools_for_turn = self._tools_for_turn(agent_mode=agent_mode, phase=phase)
+        tools_for_turn = self._tools_for_turn(agent_mode=agent_mode, phase=phase, user_text=user_text)
         enforce_consent = agent_mode != "local_assistant"
+        max_sentences = self._reply_sentence_limit(agent_mode=agent_mode, tools_for_turn=tools_for_turn)
+        first_token_seconds: float | None = None
+        first_sentence_seconds: float | None = None
+        fast_reply = self._fast_reply(
+            agent_mode=agent_mode,
+            phase=phase,
+            user_text=user_text,
+            tools_for_turn=tools_for_turn,
+        )
+        if fast_reply:
+            history.append(ChatMessage(role="assistant", content=fast_reply))
+            return RouterResult(reply=fast_reply, phase=phase)
 
         try:
             result = self.llm.chat(
@@ -127,6 +141,8 @@ class SessionRouter:
 
         tool_results: list[dict] = []
         reply = result.text
+        if max_sentences is not None and reply:
+            reply = self._truncate_sentences(reply, max_sentences)
 
         for call in result.tool_calls:
             fn = call.get("function", {})
@@ -163,7 +179,7 @@ class SessionRouter:
                 follow_up = self.llm.chat(
                     system_prompt=follow_up_prompt,
                     messages=history,
-                    tools=self._tools_for_turn(agent_mode=agent_mode, phase=updated_phase),
+                    tools=self._tools_for_turn(agent_mode=agent_mode, phase=updated_phase, user_text=user_text),
                 )
                 if follow_up.text:
                     reply = follow_up.text
@@ -203,11 +219,30 @@ class SessionRouter:
 
         history = self._histories.setdefault(call_sid, [])
         history.append(ChatMessage(role="user", content=user_text))
-        tools_for_turn = self._tools_for_turn(agent_mode=agent_mode, phase=phase)
+        tools_for_turn = self._tools_for_turn(agent_mode=agent_mode, phase=phase, user_text=user_text)
         enforce_consent = agent_mode != "local_assistant"
-
+        max_sentences = self._reply_sentence_limit(agent_mode=agent_mode, tools_for_turn=tools_for_turn)
         first_token_seconds: float | None = None
         first_sentence_seconds: float | None = None
+        fast_reply = self._fast_reply(
+            agent_mode=agent_mode,
+            phase=phase,
+            user_text=user_text,
+            tools_for_turn=tools_for_turn,
+        )
+        if fast_reply:
+            first_sentence_seconds = await self._emit_reply_text(
+                fast_reply,
+                on_sentence=on_sentence,
+                started=started,
+                first_sentence_seconds=first_sentence_seconds,
+            )
+            history.append(ChatMessage(role="assistant", content=fast_reply))
+            return RouterStreamOutcome(
+                result=RouterResult(reply=fast_reply, phase=phase),
+                first_token_seconds=0.0,
+                first_sentence_seconds=first_sentence_seconds,
+            )
 
         try:
             streamed = await self._stream_reply(
@@ -217,6 +252,7 @@ class SessionRouter:
                 started=started,
                 on_sentence=on_sentence,
                 first_sentence_seconds=first_sentence_seconds,
+                max_sentences=max_sentences,
             )
             reply = streamed["text"]
             tool_calls = streamed["tool_calls"]
@@ -280,10 +316,11 @@ class SessionRouter:
                     follow_up = await self._stream_reply(
                         system_prompt=follow_up_prompt,
                         messages=history,
-                        tools=self._tools_for_turn(agent_mode=agent_mode, phase=updated_phase),
+                        tools=self._tools_for_turn(agent_mode=agent_mode, phase=updated_phase, user_text=user_text),
                         started=started,
                         on_sentence=on_sentence,
                         first_sentence_seconds=first_sentence_seconds,
+                        max_sentences=max_sentences,
                     )
                     if follow_up["text"]:
                         reply = follow_up["text"]
@@ -372,11 +409,13 @@ class SessionRouter:
         started: float,
         on_sentence: SentenceHandler | None,
         first_sentence_seconds: float | None,
+        max_sentences: int | None,
     ) -> dict:
         full_text = ""
         buffer = ""
         tool_calls: list[dict] = []
         first_token_seconds: float | None = None
+        emitted_sentences: list[str] = []
         async for chunk in self.llm.chat_stream(
             system_prompt=system_prompt,
             messages=messages,
@@ -398,14 +437,33 @@ class SessionRouter:
                     started=started,
                     first_sentence_seconds=first_sentence_seconds,
                 )
+                emitted_sentences.append(sentence.strip())
+                if max_sentences is not None and len(emitted_sentences) >= max_sentences:
+                    full_text = " ".join(emitted_sentences)
+                    buffer = ""
+                    return {
+                        "text": full_text,
+                        "tool_calls": tool_calls,
+                        "first_token_seconds": first_token_seconds,
+                        "first_sentence_seconds": first_sentence_seconds,
+                    }
 
         if buffer.strip():
+            if max_sentences is not None and len(emitted_sentences) >= max_sentences:
+                buffer = ""
+            else:
+                sentence = buffer.strip()
+                emitted_sentences.append(sentence)
+                full_text = " ".join(emitted_sentences)
+                buffer = ""
             first_sentence_seconds = await self._emit_sentence(
-                buffer.strip(),
+                emitted_sentences[-1],
                 on_sentence=on_sentence,
                 started=started,
                 first_sentence_seconds=first_sentence_seconds,
             )
+        elif emitted_sentences:
+            full_text = " ".join(emitted_sentences)
 
         return {
             "text": full_text,
@@ -467,7 +525,7 @@ class SessionRouter:
         return sentences
 
     @staticmethod
-    def _tools_for_turn(*, agent_mode: str, phase: str) -> list[dict]:
+    def _tools_for_turn(*, agent_mode: str, phase: str, user_text: str = "") -> list[dict]:
         mapping = LOCAL_ASSISTANT_PHASE_TOOL_NAMES if agent_mode == "local_assistant" else PHASE_TOOL_NAMES
         tool_names = mapping.get(phase, mapping["INTAKE"])
         return [
@@ -475,6 +533,74 @@ class SessionRouter:
             for name in tool_names
             if name in TOOL_DEFINITION_BY_NAME
         ]
+
+    @staticmethod
+    def _local_assistant_needs_tools(user_text: str, phase: str) -> bool:
+        text = user_text.lower()
+        if phase in {"BOOKING", "CLOSE"}:
+            return True
+        tool_keywords = (
+            "intake",
+            "start",
+            "update",
+            "book",
+            "schedule",
+            "calendar",
+            "consult",
+            "appointment",
+            "create case",
+            "open case",
+            "decline",
+            "consent",
+            "record",
+            "dashboard",
+        )
+        return any(keyword in text for keyword in tool_keywords)
+
+    @staticmethod
+    def _reply_sentence_limit(*, agent_mode: str, tools_for_turn: list[dict]) -> int | None:
+        if agent_mode == "local_assistant" and not tools_for_turn:
+            return LOCAL_ASSISTANT_SENTENCE_LIMIT
+        return None
+
+    @staticmethod
+    def _fast_reply(
+        *,
+        agent_mode: str,
+        phase: str,
+        user_text: str,
+        tools_for_turn: list[dict],
+    ) -> str | None:
+        if agent_mode != "local_assistant" or phase != "DISCLOSURE" or tools_for_turn:
+            return None
+        normalized = re.sub(r"[^a-z0-9\s']", " ", user_text.lower())
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        if not normalized:
+            return None
+        greeting_patterns = {
+            "hi",
+            "hello",
+            "hey",
+            "yo",
+            "sup",
+            "what's up",
+            "whats up",
+            "hey what's up",
+            "hello what's up",
+            "yo what's up",
+        }
+        if normalized in greeting_patterns:
+            return "Hi there!"
+        if any(term in normalized for term in ("injury", "attorney", "lawyer", "case", "claim")):
+            return "Sure thing. Tell me what happened."
+        return None
+
+    @classmethod
+    def _truncate_sentences(cls, text: str, sentence_limit: int) -> str:
+        sentences = cls._split_fallback_sentences(text)
+        if not sentences:
+            return text.strip()
+        return " ".join(sentences[:sentence_limit]).strip()
 
     def _build_prompt(
         self,

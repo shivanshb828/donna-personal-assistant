@@ -40,6 +40,7 @@ class DonnaLLM:
         self.ollama_url = normalized
         self.model = model
         self.keep_alive = self._default_keep_alive()
+        self.options = self._default_options()
 
     @staticmethod
     def _default_keep_alive() -> int | str:
@@ -50,6 +51,26 @@ class DonnaLLM:
             return int(raw_value)
         except ValueError:
             return raw_value
+
+    @staticmethod
+    def _default_options() -> dict:
+        options: dict[str, int | float] = {
+            "num_predict": 16,
+            "temperature": 0.2,
+        }
+        num_predict = os.getenv("DONNA_OLLAMA_NUM_PREDICT", "").strip()
+        if num_predict:
+            try:
+                options["num_predict"] = max(1, int(num_predict))
+            except ValueError:
+                pass
+        temperature = os.getenv("DONNA_OLLAMA_TEMPERATURE", "").strip()
+        if temperature:
+            try:
+                options["temperature"] = float(temperature)
+            except ValueError:
+                pass
+        return options
 
     def _chat_payload(
         self,
@@ -71,6 +92,8 @@ class DonnaLLM:
         }
         if tools:
             payload["tools"] = tools
+        if self.options:
+            payload["options"] = self.options
         return payload
 
     @staticmethod
@@ -157,19 +180,54 @@ class DonnaLLM:
     def generate_simple(self, *, system_prompt: str, user_text: str) -> str:
         prompt = f"{system_prompt}\n\nClient: {user_text}\nDonna:"
         with httpx.Client(timeout=120.0) as client:
-            num_ctx = int(os.getenv("DONNA_NUM_CTX", "4096"))
-            resp = client.post(
-                f"{self.ollama_url}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "keep_alive": self.keep_alive,
-                    "options": {"num_ctx": num_ctx, "num_predict": 256},
-                },
-            )
+            if self.options:
+                resp = client.post(
+                    f"{self.ollama_url}/api/generate",
+                    json={
+                        "model": self.model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "keep_alive": self.keep_alive,
+                        "options": self.options,
+                    },
+                )
+            else:
+                resp = client.post(
+                    f"{self.ollama_url}/api/generate",
+                    json={
+                        "model": self.model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "keep_alive": self.keep_alive,
+                    },
+                )
             resp.raise_for_status()
             return resp.json().get("response", "").strip()
+
+    def warm(self) -> None:
+        with httpx.Client(timeout=120.0) as client:
+            if self.options:
+                resp = client.post(
+                    f"{self.ollama_url}/api/generate",
+                    json={
+                        "model": self.model,
+                        "prompt": "OK",
+                        "stream": False,
+                        "keep_alive": self.keep_alive,
+                        "options": self.options,
+                    },
+                )
+            else:
+                resp = client.post(
+                    f"{self.ollama_url}/api/generate",
+                    json={
+                        "model": self.model,
+                        "prompt": "OK",
+                        "stream": False,
+                        "keep_alive": self.keep_alive,
+                    },
+                )
+        resp.raise_for_status()
 
     @staticmethod
     def parse_tool_args(raw: object) -> dict:

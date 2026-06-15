@@ -10,7 +10,8 @@ from dataclasses import dataclass
 import httpx
 
 STT_URL = os.getenv("DONNA_STT_URL", "http://localhost:9000/v1/audio/transcriptions")
-STT_MODEL = os.getenv("DONNA_STT_MODEL", "Systran/faster-distil-whisper-large-v3")
+STT_MODEL = os.getenv("DONNA_STT_MODEL", "Systran/faster-whisper-tiny.en")
+STT_WARM_SECONDS = float(os.getenv("DONNA_STT_WARM_SECONDS", "0.5"))
 
 
 def _pcm16_to_wav(pcm_bytes: bytes, sample_rate: int = 16000, channels: int = 1) -> bytes:
@@ -33,6 +34,12 @@ def transcribe_audio(audio_bytes: bytes) -> str:
         )
     resp.raise_for_status()
     return resp.json().get("text", "").strip()
+
+
+def warm_stt() -> None:
+    sample_count = max(1, int(16000 * STT_WARM_SECONDS))
+    silent_pcm = b"\x00\x00" * sample_count
+    transcribe_audio(silent_pcm)
 
 
 @dataclass

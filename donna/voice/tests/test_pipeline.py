@@ -10,7 +10,12 @@ from donna.voice import pipeline
 
 
 def test_run_text_query_uses_shared_router_and_emits_tool_events(capsys):
-    runtime = pipeline.LocalVoiceRuntime(session_id="local-test-1", router=MagicMock())
+    runtime = pipeline.LocalVoiceRuntime(
+        session_id="local-test-1",
+        router=MagicMock(),
+        record_vad=MagicMock(),
+        interrupt_vad=MagicMock(),
+    )
     runtime.router.handle_turn.return_value = RouterResult(
         reply="Maria Lopez is recovering and has a consultation scheduled.",
         tool_results=[
@@ -48,3 +53,72 @@ def test_run_text_query_uses_shared_router_and_emits_tool_events(capsys):
     output = capsys.readouterr().out
     assert "You: How is Maria Lopez doing?" in output
     assert "Donna: Maria Lopez is recovering and has a consultation scheduled." in output
+
+
+def test_interruption_tracker_sets_stop_event_and_accumulates_audio():
+    tracker = pipeline.InterruptionTracker()
+    stop_event = MagicMock()
+
+    vad = MagicMock()
+    vad.process.side_effect = [
+        {"is_speaking": True, "speech_ended": False, "audio": b"hello", "confidence": 0.95, "rms": 1800},
+        {"is_speaking": True, "speech_ended": False, "audio": b"hello!", "confidence": 0.95, "rms": 1800},
+        {"is_speaking": True, "speech_ended": False, "audio": b"hello!!", "confidence": 0.95, "rms": 1800},
+        {"is_speaking": True, "speech_ended": False, "audio": b"hello!!!", "confidence": 0.95, "rms": 1800},
+        {"is_speaking": True, "speech_ended": False, "audio": b"hello!!!!", "confidence": 0.95, "rms": 1800},
+        {"is_speaking": False, "speech_ended": True, "audio": b"hello!!!!\x00", "confidence": 0.4, "rms": 100},
+    ]
+
+    assert tracker.feed(vad=vad, chunk=b"chunk-1", stop_event=stop_event) is False
+    stop_event.set.assert_not_called()
+    assert tracker.interrupted is False
+    assert tracker.audio is None
+
+    assert tracker.feed(vad=vad, chunk=b"chunk-2", stop_event=stop_event) is False
+    stop_event.set.assert_not_called()
+    assert tracker.interrupted is False
+
+    assert tracker.feed(vad=vad, chunk=b"chunk-3", stop_event=stop_event) is False
+    stop_event.set.assert_not_called()
+    assert tracker.interrupted is False
+
+    assert tracker.feed(vad=vad, chunk=b"chunk-4", stop_event=stop_event) is False
+    stop_event.set.assert_not_called()
+    assert tracker.interrupted is False
+
+    assert tracker.feed(vad=vad, chunk=b"chunk-5", stop_event=stop_event) is False
+    stop_event.set.assert_called_once()
+    assert tracker.interrupted is True
+
+    assert tracker.feed(vad=vad, chunk=b"chunk-6", stop_event=stop_event) is True
+    assert tracker.audio == b"hello!!!!\x00"
+
+
+def test_interruption_tracker_ignores_audio_during_grace_window():
+    tracker = pipeline.InterruptionTracker()
+    stop_event = MagicMock()
+
+    vad = MagicMock()
+    vad.process.return_value = {"is_speaking": True, "speech_ended": False, "audio": b"echo"}
+
+    assert tracker.feed(vad=vad, chunk=b"chunk-1", stop_event=stop_event, can_interrupt=False) is False
+    stop_event.set.assert_not_called()
+    assert tracker.interrupted is False
+    assert tracker.speech_chunks == 0
+
+
+def test_interruption_tracker_ignores_low_rms_or_low_confidence_audio():
+    tracker = pipeline.InterruptionTracker()
+    stop_event = MagicMock()
+
+    vad = MagicMock()
+    vad.process.side_effect = [
+        {"is_speaking": True, "speech_ended": False, "audio": b"music", "confidence": 0.95, "rms": 300},
+        {"is_speaking": True, "speech_ended": False, "audio": b"music", "confidence": 0.3, "rms": 2000},
+    ]
+
+    assert tracker.feed(vad=vad, chunk=b"chunk-1", stop_event=stop_event) is False
+    assert tracker.feed(vad=vad, chunk=b"chunk-2", stop_event=stop_event) is False
+    stop_event.set.assert_not_called()
+    assert tracker.interrupted is False
+    assert tracker.speech_chunks == 0

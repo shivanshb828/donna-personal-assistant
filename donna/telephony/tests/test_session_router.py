@@ -200,3 +200,51 @@ def test_stream_turn_short_circuits_record_consent(router: SessionRouter, tmp_pa
         assert seen == ["Thanks.", "I've noted your consent.", "Please tell me what happened."]
 
     asyncio.run(_run())
+
+
+def test_local_assistant_fast_reply_skips_llm_for_greeting(router: SessionRouter, tmp_path: Path):
+    telephony_db = tmp_path / "telephony.sqlite"
+    create_call_session(telephony_db, call_sid="LOCAL5", phone=None, agent_mode="local_assistant")
+
+    result = router.handle_turn(
+        call_sid="LOCAL5",
+        user_text="Yo, what's up?",
+        agent_mode="local_assistant",
+    )
+
+    assert result.reply == "Hi there!"
+    router.llm.chat.assert_not_called()
+
+
+def test_local_assistant_fast_reply_skips_llm_for_vague_intake(router: SessionRouter, tmp_path: Path):
+    telephony_db = tmp_path / "telephony.sqlite"
+    create_call_session(telephony_db, call_sid="LOCAL6", phone=None, agent_mode="local_assistant")
+
+    result = router.handle_turn(
+        call_sid="LOCAL6",
+        user_text="I wanted to go through my injury attorney stuff.",
+        agent_mode="local_assistant",
+    )
+
+    assert result.reply == "Sure thing. Tell me what happened."
+    router.llm.chat.assert_not_called()
+
+
+def test_local_assistant_stream_fast_reply_skips_llm_for_greeting(router: SessionRouter, tmp_path: Path):
+    telephony_db = tmp_path / "telephony.sqlite"
+    create_call_session(telephony_db, call_sid="LOCAL7", phone=None, agent_mode="local_assistant")
+
+    async def _run() -> None:
+        seen: list[str] = []
+        outcome = await router.stream_turn(
+            call_sid="LOCAL7",
+            user_text="Yo, what's up?",
+            agent_mode="local_assistant",
+            on_sentence=seen.append,
+        )
+        assert outcome.result.reply == "Hi there!"
+        assert outcome.first_token_seconds == 0.0
+        assert seen == ["Hi there!"]
+
+    asyncio.run(_run())
+    router.llm.chat_stream.assert_not_called()

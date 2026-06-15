@@ -224,21 +224,16 @@ def search_events(
     return [_row_to_event(row) for row in rows]
 
 
+
 def seed_calendar_db(db_path: Path) -> None:
-    init_calendar_db(db_path)
-    with _connect(db_path) as conn:
-        conn.execute("DELETE FROM calendar")
-    create_event(
-        db_path,
-        title="Maria Lopez intake follow-up",
-        start="2026-06-19T10:00:00-07:00",
-        end="2026-06-19T10:30:00-07:00",
-        event_type="follow_up",
-        client_id="client-maria-lopez",
-        attendee="Maria Lopez",
-        case_id="case-2026-001",
-        notes="Ask about medical evaluation and insurance claim number.",
-    )
+    """Seed demo calendar DB with events for the 2 demo clients. Used by tests and init scripts."""
+    import sys
+    from pathlib import Path as _Path
+    _scripts = _Path(__file__).resolve().parents[3] / "scripts"
+    if str(_scripts) not in sys.path:
+        sys.path.insert(0, str(_scripts))
+    from seed_demo_unified import _seed_calendar
+    _seed_calendar(db_path)
 
 
 def _row_to_event(row: sqlite3.Row) -> CalendarEvent:

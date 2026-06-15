@@ -24,6 +24,8 @@ class TestEnergyVAD:
         vad = EnergyVAD()
         result = vad.process(_loud_chunk())
         assert result["is_speaking"]
+        assert result["rms"] > 0
+        assert 0.0 <= result["confidence"] <= 1.0
 
     def test_speech_ended_after_silence(self):
         vad = EnergyVAD()

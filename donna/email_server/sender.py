@@ -47,7 +47,7 @@ EmailType = Literal[
 ]
 
 # These types are sent immediately — no lawyer approval needed
-_AUTO_SEND_TYPES = {"appointment_confirmation", "demand_acknowledgment"}
+_AUTO_SEND_TYPES = {"appointment_confirmation", "demand_acknowledgment", "email_reply"}
 
 
 # ── Draft queue ───────────────────────────────────────────────────────────────

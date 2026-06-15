@@ -22,6 +22,7 @@ aiohttp
 fastapi>=0.115.0
 uvicorn>=0.32.0
 python-multipart>=0.0.12
+transformers>=4.52.0
 
 # test
 pytest>=8.0

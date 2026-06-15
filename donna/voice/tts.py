@@ -16,6 +16,7 @@ import httpx
 KOKORO_URL = os.getenv("DONNA_KOKORO_URL", "http://localhost:8880/v1/audio/speech")
 KOKORO_VOICE = os.getenv("DONNA_KOKORO_VOICE", "af_heart")
 PIPER_MODEL = os.getenv("DONNA_PIPER_MODEL", "en_US-amy-medium")
+TTS_WARM_TEXT = os.getenv("DONNA_TTS_WARM_TEXT", "Ready.")
 
 
 def _synthesize_kokoro(text: str) -> bytes:
@@ -57,6 +58,10 @@ def synthesize(text: str) -> bytes:
         except Exception as e:
             print(f"[TTS] {name} failed: {e}")
     raise RuntimeError("All TTS backends failed")
+
+
+def warm_tts(text: str | None = None) -> bytes:
+    return synthesize(text or TTS_WARM_TEXT)
 
 
 def play_audio(

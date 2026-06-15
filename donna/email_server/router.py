@@ -159,6 +159,11 @@ async def _route_email_text(parsed: dict, session_id: str) -> None:
         "session_id": session_id,
         "text": _build_text(parsed),
         "type": "user_input",
+        "metadata": {
+            "sender_email": parsed["sender"],
+            "email_subject": parsed.get("subject", ""),
+            "case_id": parsed.get("case_id"),
+        },
     }
     label = f"user_input:{session_id}"
     log.info(

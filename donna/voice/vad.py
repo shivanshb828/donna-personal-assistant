@@ -5,13 +5,20 @@ import os
 import numpy as np
 
 
-DEFAULT_SILENCE_FRAMES = 12
-PUSH_TO_TALK_SILENCE_FRAMES = 10
+DEFAULT_SILENCE_FRAMES = 8
+PUSH_TO_TALK_SILENCE_FRAMES = 4
 
 
 def _silence_frames(profile: str = "default", override: int | None = None) -> int:
     if override is not None:
         return override
+    if profile == "push_to_talk":
+        env_value = os.getenv("DONNA_PUSH_TO_TALK_SILENCE_FRAMES")
+        if env_value:
+            try:
+                return max(1, int(env_value))
+            except ValueError:
+                pass
     env_value = os.getenv("DONNA_VAD_SILENCE_FRAMES")
     if env_value:
         try:
@@ -41,6 +48,7 @@ class SileroVAD:
     def process(self, chunk: bytes) -> dict:
         import torch
         audio_np = np.frombuffer(chunk, dtype=np.int16).astype(np.float32) / 32768.0
+        rms = float(np.sqrt(np.mean(audio_np**2)) * 32768.0)
         tensor = torch.from_numpy(audio_np)
         with torch.no_grad():
             conf = self.model(tensor, 16000).item()
@@ -56,7 +64,13 @@ class SileroVAD:
         audio_out = self._audio_buf
         if speech_ended:
             self.reset()
-        return {"is_speaking": is_speaking, "speech_ended": speech_ended, "audio": audio_out}
+        return {
+            "is_speaking": is_speaking,
+            "speech_ended": speech_ended,
+            "audio": audio_out,
+            "confidence": float(conf),
+            "rms": rms,
+        }
 
     def reset(self):
         self._audio_buf = b""
@@ -89,7 +103,14 @@ class EnergyVAD:
         audio_out = self._audio_buf
         if speech_ended:
             self.reset()
-        return {"is_speaking": is_speaking, "speech_ended": speech_ended, "audio": audio_out}
+        confidence = min(1.0, float(rms) / max(1.0, self.THRESHOLD * 2.0))
+        return {
+            "is_speaking": is_speaking,
+            "speech_ended": speech_ended,
+            "audio": audio_out,
+            "confidence": confidence,
+            "rms": float(rms),
+        }
 
     def reset(self):
         self._audio_buf = b""

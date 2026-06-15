@@ -141,6 +141,18 @@ async def handle_ipc(envelope: IPCEnvelope):
         raise HTTPException(status_code=500, detail=str(exc))
 
     log.info("Donna reply session=%s phase=%s: %s", envelope.session_id, result.phase, result.reply[:120])
+
+    # Auto-reply via email when request came from the email channel
+    if envelope.source == "email" and envelope.metadata:
+        sender_email = envelope.metadata.get("sender_email")
+        if sender_email:
+            asyncio.ensure_future(_send_email_reply(
+                to=sender_email,
+                reply_text=result.reply,
+                case_id=envelope.metadata.get("case_id") or envelope.session_id,
+                original_subject=envelope.metadata.get("email_subject", "Your inquiry"),
+            ))
+
     return {
         "status": "ok",
         "session_id": envelope.session_id,
@@ -154,6 +166,24 @@ async def handle_ipc(envelope: IPCEnvelope):
             "type": "agent_response",
         },
     }
+
+
+async def _send_email_reply(*, to: str, reply_text: str, case_id: str, original_subject: str) -> None:
+    """Send Donna's reply back to the client via email (auto-send, no approval needed)."""
+    try:
+        from donna.email_server.sender import send_email
+        subject = f"Re: {original_subject}" if not original_subject.startswith("Re:") else original_subject
+        await send_email(
+            to=to,
+            subject=subject,
+            body=reply_text,
+            case_id=case_id,
+            email_type="email_reply",
+            requires_approval=False,
+        )
+        log.info("Email auto-reply sent | to=%s case=%s", to, case_id)
+    except Exception as exc:
+        log.error("Email auto-reply failed | to=%s: %s", to, exc)
 
 
 async def _forward_to_vlm(envelope: IPCEnvelope) -> None:
