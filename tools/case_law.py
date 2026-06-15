@@ -203,7 +203,7 @@ def analyze_case_weaknesses(
             })
         else:
             strengths.append({
-                "description": f"Favorable precedent: '{op['case_name']]}' supports liability.",
+                "description": f"Favorable precedent: '{op['case_name']}' supports liability.",
                 "snippet": op["snippet"],
                 "supporting_case": _case_ref(op),
             })

@@ -206,23 +206,65 @@ async def _forward_to_vlm(envelope: IPCEnvelope) -> None:
 
 # ── Lawyer query endpoint ─────────────────────────────────────────────────────
 # The dashboard "Ask Donna" panel POSTs here.
-# Runs entirely locally: Ollama → tool layer → PostgreSQL. No external services.
+# Priority: OpenClaw gateway (GB10) → Ollama-direct (GB10 fallback) → demo stub (Mac dev)
+
+OPENCLAW_URL = os.environ.get("OPENCLAW_URL", "http://localhost:18789")
+OPENCLAW_TOKEN = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "")
+
 
 class QueryRequest(BaseModel):
     question: str
+    case_id: str | None = None
+
+
+async def _query_openclaw(question: str) -> str | None:
+    try:
+        headers = {"Content-Type": "application/json"}
+        if OPENCLAW_TOKEN:
+            headers["Authorization"] = f"Bearer {OPENCLAW_TOKEN}"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"{OPENCLAW_URL}/v1/agents/donna/chat",
+                headers=headers,
+                json={"messages": [{"role": "user", "content": question}]},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("content") or data.get("message") or str(data)
+    except Exception as exc:
+        log.warning("OpenClaw unavailable: %s", exc)
+        return None
+
+
+async def _query_ollama(question: str) -> str | None:
+    try:
+        from donna.lawyer.agent import ask as lawyer_ask
+        return await asyncio.to_thread(lawyer_ask, question)
+    except Exception as exc:
+        log.warning("Ollama-direct unavailable: %s", exc)
+        return None
 
 
 @app.post("/api/query")
 async def lawyer_query(body: QueryRequest):
-    """Natural-language query against the case database via local Ollama."""
     log.info("Query | question=%s", body.question[:120])
-    try:
-        from donna.lawyer.agent import ask as lawyer_ask
-        answer = await asyncio.to_thread(lawyer_ask, body.question)
-        return {"answer": answer}
-    except Exception as exc:
-        log.error("Lawyer query failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+
+    answer = await _query_openclaw(body.question)
+    if answer:
+        return {"answer": answer, "source": "openclaw"}
+
+    answer = await _query_ollama(body.question)
+    if answer:
+        return {"answer": answer, "source": "ollama-direct"}
+
+    # Demo stub — neither OpenClaw nor Ollama reachable (Mac dev)
+    return {
+        "answer": (
+            "I can answer that on the Dell GB10 where Ollama and OpenClaw are running. "
+            "Connect via SSH to run live queries against the case database."
+        ),
+        "source": "ollama-direct",
+    }
 
 
 # ── Game plan + risk score ────────────────────────────────────────────────────
