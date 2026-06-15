@@ -17,10 +17,10 @@ export const config = {
   PORT: parseInt(process.env.PORT ?? "3001"),
   NODE_ENV: process.env.NODE_ENV ?? "development",
 
-  // Twilio
-  TWILIO_ACCOUNT_SID: required("TWILIO_ACCOUNT_SID"),
-  TWILIO_AUTH_TOKEN: required("TWILIO_AUTH_TOKEN"),
-  TWILIO_PHONE_NUMBER: required("TWILIO_PHONE_NUMBER"),
+  // Twilio (optional at startup — required for live calls)
+  TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID ?? "",
+  TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN ?? "",
+  TWILIO_PHONE_NUMBER: process.env.TWILIO_PHONE_NUMBER ?? "",
   TWILIO_PHONE_NUMBER_SID: process.env.TWILIO_PHONE_NUMBER_SID ?? "",
   PUBLIC_URL: resolvedPublicUrl,
 
