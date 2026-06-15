@@ -11,6 +11,7 @@ Run via:  python -m donna.email_server.server --mode imap
 import asyncio
 import imaplib
 import logging
+import os
 
 from . import config
 from .parser import parse_email
@@ -18,17 +19,41 @@ from .router import route_email
 
 log = logging.getLogger(__name__)
 
+# Emails from these addresses are always processed regardless of subject line.
+# Set DONNA_KNOWN_SENDERS as comma-separated list in .env to override.
+_DEFAULT_KNOWN_SENDERS = [
+    "shivansh.bansal828@gmail.com",
+    "aayushgandhi134@gmail.com",
+]
 
-def _fetch_unread(conn: imaplib.IMAP4_SSL | imaplib.IMAP4) -> list[bytes]:
+def _known_senders() -> list[str]:
+    env = os.getenv("DONNA_KNOWN_SENDERS", "")
+    if env:
+        return [s.strip().lower() for s in env.split(",") if s.strip()]
+    return _DEFAULT_KNOWN_SENDERS
+
+
+def _search_uids(conn, *criteria) -> set[bytes]:
+    _, data = conn.search(None, *criteria)
+    return set(data[0].split()) if data[0] else set()
+
+
+def _fetch_unread(conn: imaplib.IMAP4_SSL | imaplib.IMAP4) -> list[tuple]:
     conn.select(config.IMAP_MAILBOX)
-    # Only fetch unread emails addressed to Donna — avoids scanning the full inbox
-    _, data = conn.search(None, "UNSEEN", "SUBJECT", "[DONNA]")
-    uids = data[0].split()
-    if not uids:
+
+    # Gate 1: [DONNA] subject tag (existing behaviour)
+    uid_set = _search_uids(conn, "UNSEEN", "SUBJECT", "[DONNA]")
+
+    # Gate 2: known senders — process regardless of subject
+    for sender in _known_senders():
+        uid_set |= _search_uids(conn, "UNSEEN", "FROM", sender)
+
+    if not uid_set:
         return []
 
+    log.info("IMAP: %d unread email(s) matched filters", len(uid_set))
     raw_emails = []
-    for uid in uids:
+    for uid in uid_set:
         _, msg_data = conn.fetch(uid, "(RFC822)")
         for part in msg_data:
             if isinstance(part, tuple):
